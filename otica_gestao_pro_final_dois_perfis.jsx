@@ -644,31 +644,10 @@ function DonutPanel({ title, value, total, items }) {
 function Dashboard({ setPage, pacientes, agendamentos, usuario }) {
   const hoje = hojeISO()
   const agHoje = agendamentos.filter((item) => item.data === hoje)
-  const agSemana = filtraPorVisao(agendamentos, 'Semana', hoje)
-  const agMes = filtraPorVisao(agendamentos, 'Mes', hoje)
-  const examesHoje = pacientes.reduce((total, paciente) => total + paciente.receitas.filter((r) => r.data === hoje).length, 0)
-  const receitasTotal = pacientes.reduce((total, paciente) => total + paciente.receitas.length, 0)
   const recepcao = isRecepcionista(usuario)
 
   return (
     <DashboardShell>
-      <HeroPanel usuario={usuario} pacientes={pacientes} agendamentos={agendamentos} receitasTotal={receitasTotal} />
-
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
-        {recepcao ? (
-          <button onClick={() => setPage('agenda')}><Info title="Agenda semana" value={agSemana.length} icon={CalendarDays} /></button>
-        ) : (
-          <button onClick={() => setPage('relatorios')}><Info title="Exames hoje" value={examesHoje} icon={ClipboardList} /></button>
-        )}
-        <button onClick={() => setPage('agenda')}><Info title="Agenda hoje" value={agHoje.length} icon={CalendarDays} /></button>
-        <button onClick={() => setPage('pacientes')}><Info title="Pacientes" value={pacientes.length} icon={Users} /></button>
-        {recepcao ? (
-          <button onClick={() => setPage('agenda')}><Info title="Agenda mês" value={agMes.length} icon={CalendarDays} /></button>
-        ) : (
-          <button onClick={() => setPage('relatorios')}><Info title="Receitas" value={receitasTotal} icon={FileText} /></button>
-        )}
-      </section>
-
       <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Action title="Buscar paciente" text={recepcao ? 'Consultar cadastro.' : 'Consultar histórico e imprimir receita.'} icon={Search} onClick={() => setPage('pacientes')} />
         {recepcao ? (
