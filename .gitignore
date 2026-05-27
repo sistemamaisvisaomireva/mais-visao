@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.log
+home-login-mobile*.png
+.env
+.env.local
+.env.*.local
+!.env.example

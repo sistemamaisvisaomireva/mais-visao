@@ -1,0 +1,847 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  background: #f5f7fa;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  overflow-x: hidden;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.print-area {
+  display: flex;
+  justify-content: center;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.pdf-page {
+  width: 794px;
+  max-width: 100%;
+  min-height: 1123px;
+  margin: 0 auto;
+  padding: 34px 48px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  background: #ffffff;
+  border: 1px solid #dbe3ea;
+  border-radius: 6px;
+  color: #0f172a;
+  font-family: Arial, Helvetica, sans-serif;
+  box-shadow: 0 18px 45px rgb(15 23 42 / 0.08);
+}
+
+.pdf-page *,
+.pdf-page *::before,
+.pdf-page *::after {
+  box-sizing: border-box;
+}
+
+.pdf-header {
+  display: grid;
+  grid-template-columns: 156px 1fr;
+  gap: 18px;
+  align-items: center;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #0f9aa8;
+}
+
+.pdf-header img {
+  width: 146px;
+  height: auto;
+  object-fit: contain;
+}
+
+.pdf-header h1 {
+  color: #0d3b66;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.pdf-header p {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.pdf-patient-card {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 10px 14px;
+  margin-bottom: 14px;
+  padding: 12px 16px;
+  border: 1px solid #dbe3ea;
+  border-left: 5px solid #0f9aa8;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.pdf-patient-card div {
+  min-width: 0;
+}
+
+.pdf-patient-card span,
+.pdf-section h2,
+.pdf-obs span,
+.pdf-signature-label {
+  display: block;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pdf-patient-card strong {
+  display: block;
+  margin-top: 2px;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.pdf-curves {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.pdf-curve-card {
+  padding: 12px 18px 10px;
+  border: 1px solid #dbe3ea;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.pdf-curve {
+  text-align: center;
+  color: #0d3b66;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.pdf-curve svg {
+  width: 100%;
+  height: 76px;
+  overflow: hidden;
+}
+
+.pdf-curve path,
+.pdf-curve line {
+  fill: none;
+  stroke: #334155;
+  stroke-width: 0.9;
+}
+
+.pdf-tables {
+  display: grid;
+  gap: 10px;
+}
+
+.pdf-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  overflow: hidden;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.pdf-table th,
+.pdf-table td {
+  height: 34px;
+  border-right: 1px solid #cbd5e1;
+  border-bottom: 1px solid #cbd5e1;
+  padding: 5px 8px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.pdf-table th:last-child,
+.pdf-table td:last-child {
+  border-right: 0;
+}
+
+.pdf-table tbody tr:last-child th,
+.pdf-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.pdf-table thead th {
+  height: 28px;
+  background: #ffffff;
+  color: #0d3b66;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pdf-table thead th:first-child {
+  background: #ffffff;
+}
+
+.pdf-table tbody th {
+  width: 70px;
+  background: #ffffff;
+  color: #0d3b66;
+  font-weight: 800;
+}
+
+.pdf-section {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid #dbe3ea;
+  border-radius: 8px;
+}
+
+.pdf-diagnosticos {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  align-items: stretch;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.pdf-check {
+  position: relative;
+  display: block;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  box-sizing: border-box;
+  overflow: visible;
+  border: 1px solid #dbe3ea;
+  border-radius: 6px;
+  background: #ffffff;
+  white-space: nowrap;
+}
+
+.pdf-check-box,
+.pdf-check > span:first-child {
+  position: relative;
+  display: block;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1.5px solid #0f9aa8;
+  border-radius: 4px;
+  color: transparent;
+  font-size: 0;
+  line-height: 0;
+}
+
+.pdf-check-box {
+  position: absolute;
+  top: 9px;
+  left: 12px;
+  transform: none;
+}
+
+.pdf-check > span:first-child {
+  position: absolute;
+  top: 9px;
+  left: 12px;
+  transform: none;
+}
+
+.pdf-check.is-checked .pdf-check-box::after,
+.pdf-check.is-checked > span:first-child::after {
+  position: absolute;
+  top: 1px;
+  left: 5px;
+  width: 5px;
+  height: 10px;
+  content: "";
+  border: solid #0f9aa8;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  transform-origin: center;
+}
+
+.pdf-check-label {
+  display: block;
+  position: absolute;
+  top: 3px;
+  left: 38px;
+  right: 10px;
+  min-width: 0;
+  height: 16px;
+  transform: none;
+  color: #0f172a;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  overflow: visible;
+  text-overflow: ellipsis;
+}
+
+.pdf-obs {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #dbe3ea;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.pdf-obs p {
+  min-height: 58px;
+  margin: 7px 0 0;
+  color: #0f172a;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.pdf-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 270px;
+  gap: 34px;
+  align-items: end;
+  min-height: 146px;
+  margin-top: auto;
+  padding-top: 20px;
+  border-top: 1px solid #cbd5e1;
+  page-break-inside: avoid;
+}
+
+.pdf-footer > div:first-child {
+  align-self: end;
+  padding-bottom: 8px;
+}
+
+.pdf-signature-line {
+  width: 100%;
+  max-width: 380px;
+  border-bottom: 1px solid #0f172a;
+}
+
+.pdf-signature-label {
+  margin-top: 4px;
+}
+
+.pdf-date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 22px;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.pdf-date-label {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.pdf-date-field {
+  display: inline-flex;
+  min-width: 38px;
+  height: 22px;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 1px;
+  border-bottom: 1px solid #0f172a;
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+.pdf-date-year {
+  min-width: 48px;
+}
+
+.pdf-date-separator {
+  display: inline-flex;
+  height: 22px;
+  align-items: center;
+  color: #0f172a;
+}
+
+.pdf-stamp {
+  display: flex;
+  flex-direction: column;
+  align-self: end;
+  justify-self: end;
+  width: 264px;
+  height: 104px;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 10px 14px 12px;
+  border: 2px solid #111827;
+  border-radius: 2px;
+  color: #0f172a;
+  background: #ffffff;
+  font-family: Arial, Helvetica, sans-serif;
+  text-align: center;
+  overflow: hidden;
+}
+
+.pdf-stamp strong {
+  display: block;
+  width: 100%;
+  margin: 0;
+  font-size: 19px;
+  font-weight: 500;
+  line-height: 1.12;
+}
+
+.pdf-stamp span {
+  display: block;
+  width: 100%;
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.05;
+}
+
+.pdf-stamp b {
+  display: block;
+  width: 100%;
+  margin: 0;
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.05;
+}
+
+@media (max-width: 720px) {
+  .print-area {
+    justify-content: center;
+    overflow-x: hidden;
+  }
+
+  .pdf-page {
+    width: 100%;
+    max-width: 100%;
+    min-height: auto;
+    padding: 18px 14px;
+    border-radius: 4px;
+    box-shadow: none;
+  }
+
+  .pdf-header {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    text-align: center;
+  }
+
+  .pdf-header img {
+    width: 128px;
+    margin: 0 auto;
+  }
+
+  .pdf-header h1 {
+    font-size: 16px;
+    letter-spacing: 0.03em;
+  }
+
+  .pdf-header p {
+    font-size: 9.5px;
+  }
+
+  .pdf-patient-card {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 10px;
+    padding: 10px 12px;
+    border-left-width: 4px;
+  }
+
+  .pdf-patient-card span,
+  .pdf-section h2,
+  .pdf-obs span,
+  .pdf-signature-label {
+    font-size: 8.5px;
+    letter-spacing: 0.06em;
+  }
+
+  .pdf-patient-card strong {
+    font-size: 11.5px;
+  }
+
+  .pdf-curves {
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .pdf-curve-card {
+    padding: 8px 6px 7px;
+  }
+
+  .pdf-curve {
+    font-size: 11px;
+  }
+
+  .pdf-curve svg {
+    height: 56px;
+  }
+
+  .pdf-tables {
+    gap: 8px;
+  }
+
+  .pdf-table {
+    font-size: 11px;
+  }
+
+  .pdf-table th,
+  .pdf-table td {
+    height: 30px;
+    padding: 4px 3px;
+  }
+
+  .pdf-table thead th {
+    height: 26px;
+    font-size: 9px;
+    letter-spacing: 0.02em;
+  }
+
+  .pdf-table tbody th {
+    width: auto;
+    font-size: 10px;
+  }
+
+  .pdf-section {
+    margin-top: 10px;
+    padding: 10px;
+  }
+
+  .pdf-diagnosticos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .pdf-check {
+    height: 34px;
+    min-height: 34px;
+  }
+
+  .pdf-check-box,
+  .pdf-check > span:first-child {
+    top: 8px;
+    left: 10px;
+  }
+
+  .pdf-check-label {
+    top: 8px;
+    left: 34px;
+    right: 8px;
+    height: 14px;
+    font-size: 11px;
+    line-height: 14px;
+  }
+
+  .pdf-obs p {
+    min-height: 46px;
+    font-size: 12px;
+  }
+
+  .pdf-footer {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    min-height: auto;
+    margin-top: 28px;
+    padding-top: 16px;
+  }
+
+  .pdf-footer > div:first-child {
+    padding-bottom: 0;
+  }
+
+  .pdf-signature-line {
+    max-width: 100%;
+  }
+
+  .pdf-date {
+    margin-top: 18px;
+    font-size: 12px;
+  }
+
+  .pdf-stamp {
+    width: 100%;
+    max-width: 265px;
+    height: 96px;
+    align-self: center;
+    justify-self: center;
+    margin: 0 auto;
+  }
+
+  .pdf-stamp strong {
+    font-size: 17px;
+  }
+
+  .pdf-stamp span {
+    font-size: 21px;
+  }
+
+  .pdf-stamp b {
+    font-size: 20px;
+  }
+}
+
+body.pdf-export-mode {
+  overflow: visible;
+}
+
+body.pdf-export-mode .print-area {
+  width: 794px;
+  max-width: none;
+  min-width: 794px;
+  justify-content: flex-start;
+  overflow: visible;
+}
+
+body.pdf-export-mode .pdf-page {
+  width: 794px;
+  max-width: none;
+  min-width: 794px;
+  min-height: 1123px;
+  margin: 0;
+  padding: 34px 48px;
+  border: 1px solid #dbe3ea;
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+body.pdf-export-mode .pdf-header {
+  grid-template-columns: 156px 1fr;
+  gap: 18px;
+  text-align: left;
+}
+
+body.pdf-export-mode .pdf-header img {
+  width: 146px;
+  margin: 0;
+}
+
+body.pdf-export-mode .pdf-header h1 {
+  font-size: 22px;
+  letter-spacing: 0.04em;
+}
+
+body.pdf-export-mode .pdf-header p {
+  font-size: 11px;
+}
+
+body.pdf-export-mode .pdf-patient-card {
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 10px 14px;
+  padding: 12px 16px;
+  border-left-width: 5px;
+}
+
+body.pdf-export-mode .pdf-patient-card span,
+body.pdf-export-mode .pdf-section h2,
+body.pdf-export-mode .pdf-obs span,
+body.pdf-export-mode .pdf-signature-label {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+body.pdf-export-mode .pdf-patient-card strong {
+  font-size: 13px;
+}
+
+body.pdf-export-mode .pdf-curves {
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+body.pdf-export-mode .pdf-curve-card {
+  padding: 12px 18px 10px;
+}
+
+body.pdf-export-mode .pdf-curve {
+  font-size: 12px;
+}
+
+body.pdf-export-mode .pdf-curve svg {
+  height: 76px;
+}
+
+body.pdf-export-mode .pdf-tables {
+  gap: 10px;
+}
+
+body.pdf-export-mode .pdf-table {
+  font-size: 13px;
+}
+
+body.pdf-export-mode .pdf-table th,
+body.pdf-export-mode .pdf-table td {
+  height: 34px;
+  padding: 5px 8px;
+}
+
+body.pdf-export-mode .pdf-table thead th {
+  height: 28px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
+body.pdf-export-mode .pdf-table tbody th {
+  width: 70px;
+  font-size: 13px;
+}
+
+body.pdf-export-mode .pdf-section {
+  margin-top: 14px;
+  padding: 12px 14px;
+}
+
+body.pdf-export-mode .pdf-diagnosticos {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+body.pdf-export-mode .pdf-check {
+  height: 36px;
+  min-height: 36px;
+}
+
+body.pdf-export-mode .pdf-check-box,
+body.pdf-export-mode .pdf-check > span:first-child {
+  top: 9px;
+  left: 12px;
+}
+
+body.pdf-export-mode .pdf-check-label {
+  top: 3px;
+  left: 38px;
+  right: 10px;
+  height: 16px;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+body.pdf-export-mode .pdf-obs p {
+  min-height: 58px;
+  font-size: 13px;
+}
+
+body.pdf-export-mode .pdf-footer {
+  grid-template-columns: minmax(0, 1fr) 270px;
+  gap: 34px;
+  min-height: 146px;
+  margin-top: auto;
+  padding-top: 20px;
+}
+
+body.pdf-export-mode .pdf-footer > div:first-child {
+  padding-bottom: 8px;
+}
+
+body.pdf-export-mode .pdf-date {
+  margin-top: 22px;
+  font-size: 13px;
+}
+
+body.pdf-export-mode .pdf-stamp {
+  width: 264px;
+  max-width: none;
+  height: 104px;
+  align-self: end;
+  justify-self: end;
+}
+
+body.pdf-export-mode .pdf-stamp strong {
+  font-size: 19px;
+}
+
+body.pdf-export-mode .pdf-stamp span {
+  font-size: 24px;
+}
+
+body.pdf-export-mode .pdf-stamp b {
+  font-size: 22px;
+}
+
+@page {
+  size: A4 portrait;
+  margin: 0;
+}
+
+@media print {
+  body {
+    min-width: 0;
+    background: #ffffff;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+
+  .print-area {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    width: 210mm;
+    min-height: 297mm;
+    justify-content: center;
+    background: #ffffff;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .pdf-page {
+    width: 210mm;
+    max-width: none;
+    min-height: 297mm;
+    height: 297mm;
+    margin: 0;
+    padding: 12mm;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .pdf-header img {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .pdf-page,
+  .pdf-page * {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}
