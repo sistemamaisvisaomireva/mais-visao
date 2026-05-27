@@ -491,19 +491,21 @@ function Sidebar({ page, setPage, usuario, onLogout }) {
 }
 
 function MobileNav({ page, setPage, usuario }) {
-  const items = getMenu(usuario).slice(0, 5)
+  const items = getMenu(usuario)
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 grid grid-cols-5 border-t border-slate-200 bg-white px-1 py-2 lg:hidden">
-      {items.map((item) => {
-        const Icon = item.icon
-        const shortLabel = item.label === 'Novo agendamento' ? 'Agendar' : item.label === 'Novo paciente' ? 'Novo' : item.label
-        return (
-          <button key={item.page} onClick={() => setPage(item.page)} className={`flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-2 text-[11px] ${page === item.page ? 'bg-[#0F9AA8]/10 text-[#0F9AA8]' : 'text-slate-500'}`}>
-            <Icon size={18} /><span className="max-w-full truncate">{shortLabel}</span>
-          </button>
-        )
-      })}
+    <nav className="fixed bottom-0 left-0 right-0 z-50 overflow-x-auto border-t border-slate-200 bg-white px-1 py-2 lg:hidden">
+      <div className="flex min-w-max gap-1">
+        {items.map((item) => {
+          const Icon = item.icon
+          const shortLabel = item.label === 'Novo agendamento' ? 'Agendar' : item.label === 'Novo paciente' ? 'Novo' : item.label
+          return (
+            <button key={item.page} onClick={() => setPage(item.page)} className={`flex w-20 flex-shrink-0 flex-col items-center gap-1 rounded-xl px-1 py-2 text-[11px] ${page === item.page ? 'bg-[#0F9AA8]/10 text-[#0F9AA8]' : 'text-slate-500'}`}>
+              <Icon size={18} /><span className="max-w-full truncate">{shortLabel}</span>
+            </button>
+          )
+        })}
+      </div>
     </nav>
   )
 }
