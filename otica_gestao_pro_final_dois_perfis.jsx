@@ -239,6 +239,10 @@ function mapPaciente(row, receitas = []) {
     cidade: row.cidade || 'Criciúma',
     unidade: row.unidade || row.cidade || 'Criciúma',
     observacoes: row.observacoes || '',
+    usa_oculos: Boolean(row.usa_oculos),
+    diabetes: Boolean(row.diabetes),
+    pressao_alta: Boolean(row.pressao_alta),
+    outras_doencas: row.outras_doencas || '',
     receitas,
   }
 }
@@ -737,9 +741,32 @@ function Pacientes({ pacientes, setPacienteAtual, setPage, canOpenHistorico = tr
   )
 }
 
+function PatientCheckbox({ label, checked, onChange }) {
+  return (
+    <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+      {label}
+    </label>
+  )
+}
+
 function NovoPaciente({ onSave, setPage }) {
   const [erro, setErro] = useState('')
-  const [form, setForm] = useState({ nome: '', cpf: '', nascimento: '', telefone: '', email: '', estado: 'SC', cidade: 'Criciúma', unidade: 'Criciúma', observacoes: '' })
+  const [form, setForm] = useState({
+    nome: '',
+    cpf: '',
+    nascimento: '',
+    telefone: '',
+    email: '',
+    estado: 'SC',
+    cidade: 'Criciúma',
+    unidade: 'Criciúma',
+    observacoes: '',
+    usa_oculos: false,
+    diabetes: false,
+    pressao_alta: false,
+    outras_doencas: '',
+  })
 
   function update(key, value) {
     setForm((old) => ({ ...old, [key]: value }))
@@ -785,6 +812,14 @@ function NovoPaciente({ onSave, setPage }) {
             </select>
           </Field>
         </div>
+        <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
+          <PatientCheckbox label="Já é usuário de óculos" checked={Boolean(form.usa_oculos)} onChange={(value) => update('usa_oculos', value)} />
+          <PatientCheckbox label="Diabetes" checked={Boolean(form.diabetes)} onChange={(value) => update('diabetes', value)} />
+          <PatientCheckbox label="Pressão alta" checked={Boolean(form.pressao_alta)} onChange={(value) => update('pressao_alta', value)} />
+        </div>
+        <Field label="Outras doenças">
+          <input value={form.outras_doencas || ''} onChange={(e) => update('outras_doencas', e.target.value.slice(0, 160))} placeholder="Campo opcional" className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-[#0F9AA8]" />
+        </Field>
         <Field label="Observações">
           <textarea value={form.observacoes} onChange={(e) => update('observacoes', e.target.value.slice(0, 300))} className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-[#0F9AA8]" rows={4} />
         </Field>
@@ -1704,6 +1739,10 @@ export default function OticaGestaoProFinal() {
       cidade: form.cidade || null,
       unidade: form.unidade || form.cidade || null,
       observacoes: form.observacoes || null,
+      usa_oculos: Boolean(form.usa_oculos),
+      diabetes: Boolean(form.diabetes),
+      pressao_alta: Boolean(form.pressao_alta),
+      outras_doencas: form.outras_doencas || null,
       created_by: usuario.id,
       updated_by: usuario.id,
     }
