@@ -396,10 +396,10 @@ function Login({ onLogin, initialError = '' }) {
     <div className="flex min-h-screen w-full items-center justify-center overflow-hidden bg-[#F5F7FA] p-5">
       <form onSubmit={entrar} className="mx-auto min-w-0 w-[calc(100vw-2.5rem)] max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
         <div className="mb-8 flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#0F9AA8] font-semibold text-white">MV</div>
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#0F9AA8] font-semibold text-white">O+</div>
           <div>
-            <h1 className="text-xl font-semibold text-[#0D3B66]">Ótica Gestão Pro</h1>
-            <p className="text-sm text-slate-500">Sistema interno Mais Visão</p>
+            <h1 className="text-xl font-semibold text-[#0D3B66]">Opta+ Gestão Pro</h1>
+            <p className="text-sm text-slate-500">Sistema interno Opta+</p>
           </div>
         </div>
         <div className="space-y-4">
@@ -467,9 +467,9 @@ function Sidebar({ page, setPage, usuario, onLogout }) {
     <aside className="sticky top-0 hidden h-screen w-72 flex-col bg-[#0A314F] p-5 text-white shadow-2xl shadow-slate-900/20 lg:flex">
       <div className="mb-8 rounded-3xl bg-white/10 p-4 ring-1 ring-white/10">
         <div className="mb-5 flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#0F9AA8] font-semibold text-white shadow-lg shadow-cyan-950/30">MV</div>
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#0F9AA8] font-semibold text-white shadow-lg shadow-cyan-950/30">O+</div>
           <div>
-            <h1 className="font-semibold tracking-wide">Mais Visão</h1>
+            <h1 className="font-semibold tracking-wide">Opta+</h1>
             <p className="text-xs text-cyan-50/60">Gestão optométrica</p>
           </div>
         </div>
@@ -556,7 +556,7 @@ function HeroPanel({ usuario, pacientes, agendamentos, receitasTotal }) {
       <div className="grid gap-6 xl:grid-cols-[1.45fr_1fr] xl:items-center">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-100/70">Painel operacional</p>
-          <h2 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">Visão geral da Mais Visão</h2>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">Visão geral da Opta+</h2>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-cyan-50/75">Atendimentos, agenda e prescrições reunidos em uma central rápida para tomada de decisão.</p>
           <div className="mt-6 flex flex-wrap gap-3">
             <span className="rounded-full bg-white/10 px-4 py-2 text-sm text-cyan-50">{usuario.nome}</span>
