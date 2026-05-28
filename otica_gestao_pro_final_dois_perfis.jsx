@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './src/lib/supabase.js'
 import {
   Activity,
@@ -32,7 +32,7 @@ const cidadesPorEstado = {
 }
 
 const cidadesPadrao = ['Capital', 'Interior']
-const unidadesSC = ['Garopaba', 'Imbituba', 'Laguna', 'Criciúma', 'Tubarão']
+const unidadesSC = ['Garopaba', 'Imbituba', 'Laguna', 'Criciúma', 'Tubarão', 'Torres - RS', 'Sombrio - SC', 'Orleans - SC', 'São João Batista - SC']
 const diagnosticosOptions = ['Miopia', 'Hipermetropia', 'Astigmatismo', 'Presbiopia']
 const lentesOptions = ['Multifocal', 'Bifocal', 'VS', 'Fotossensível', 'A.R.', 'Incolor']
 const statusOptions = ['Confirmado', 'Agendado', 'Cancelado', 'Atendido']
@@ -652,6 +652,11 @@ function Dashboard({ setPage, pacientes, agendamentos, usuario }) {
 
   return (
     <DashboardShell>
+      <section>
+        <h2 className="text-2xl font-semibold text-[#0D3B66] md:text-3xl">Bem vindo(a), {usuario.nome}!</h2>
+        <p className="mt-1 text-sm text-slate-500">Que bom te ver.</p>
+      </section>
+
       <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Action title="Buscar paciente" text={recepcao ? 'Consultar cadastro.' : 'Consultar histórico e imprimir receita.'} icon={Search} onClick={() => setPage('pacientes')} />
         {recepcao ? (
@@ -750,8 +755,9 @@ function PatientCheckbox({ label, checked, onChange }) {
   )
 }
 
-function NovoPaciente({ onSave, setPage }) {
+function NovoPaciente({ onSave, setPage, pacientes = [] }) {
   const [erro, setErro] = useState('')
+  const [duplicados, setDuplicados] = useState(null)
   const [form, setForm] = useState({
     nome: '',
     cpf: '',
@@ -772,14 +778,36 @@ function NovoPaciente({ onSave, setPage }) {
     setForm((old) => ({ ...old, [key]: value }))
   }
 
-  async function salvar() {
+  function encontrarDuplicados() {
+    const nome = form.nome.trim().toLowerCase()
+    const cpf = onlyDigits(form.cpf, 11)
+    const telefone = onlyDigits(form.telefone, 11)
+
+    return pacientes
+      .map((paciente) => {
+        const campos = []
+        if (nome && paciente.nome?.trim().toLowerCase() === nome) campos.push('nome')
+        if (cpf && onlyDigits(paciente.cpf || '', 11) === cpf) campos.push('CPF')
+        if (telefone && onlyDigits(paciente.telefone || '', 11) === telefone) campos.push('telefone')
+        return campos.length ? { paciente, campos } : null
+      })
+      .filter(Boolean)
+  }
+
+  async function salvar(confirmarDuplicado = false) {
     if (form.nome.trim().length < 3) return setErro('Nome precisa ter pelo menos 3 letras.')
-    if (onlyDigits(form.cpf).length !== 11) return setErro('CPF precisa ter 11 números.')
-    if (onlyDigits(form.telefone).length < 10) return setErro('Telefone precisa ter DDD.')
-    if (!form.nascimento) return setErro('Informe a data de nascimento.')
+    if (!confirmarDuplicado) {
+      const encontrados = encontrarDuplicados()
+      if (encontrados.length) {
+        setDuplicados(encontrados)
+        setErro('')
+        return
+      }
+    }
     try {
       await onSave(form)
       setErro('')
+      setDuplicados(null)
       setPage('pacientes')
     } catch (error) {
       setErro(error.message || 'Não foi possível salvar o paciente.')
@@ -817,18 +845,44 @@ function NovoPaciente({ onSave, setPage }) {
           <PatientCheckbox label="Diabetes" checked={Boolean(form.diabetes)} onChange={(value) => update('diabetes', value)} />
           <PatientCheckbox label="Pressão alta" checked={Boolean(form.pressao_alta)} onChange={(value) => update('pressao_alta', value)} />
         </div>
+        <div className="pt-4">
         <Field label="Outras doenças">
-          <input value={form.outras_doencas || ''} onChange={(e) => update('outras_doencas', e.target.value.slice(0, 160))} placeholder="Campo opcional" className="mt-3 w-full rounded-xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-[#0F9AA8]" />
+          <input value={form.outras_doencas || ''} onChange={(e) => update('outras_doencas', e.target.value.slice(0, 160))} placeholder="Campo opcional" className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-[#0F9AA8]" />
         </Field>
+        </div>
+        <div className="pt-4">
         <Field label="Observações">
-          <textarea value={form.observacoes} onChange={(e) => update('observacoes', e.target.value.slice(0, 300))} className="mt-3 w-full rounded-xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-[#0F9AA8]" rows={4} />
+          <textarea value={form.observacoes} onChange={(e) => update('observacoes', e.target.value.slice(0, 300))} className="w-full rounded-xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-[#0F9AA8]" rows={4} />
         </Field>
+        </div>
         {erro ? <p className="mt-4 text-sm text-red-500">{erro}</p> : null}
         <div className="mt-5 grid grid-cols-1 gap-3 sm:flex sm:justify-end">
           <Button variant="light" onClick={() => setPage('dashboard')}>Cancelar</Button>
-          <Button icon={CheckCircle2} onClick={salvar}>Salvar paciente</Button>
+          <Button icon={CheckCircle2} onClick={() => salvar()}>Salvar paciente</Button>
         </div>
       </div>
+      {duplicados ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-semibold text-[#0D3B66]">Cadastro parecido encontrado</h3>
+            <p className="mt-2 text-sm text-slate-500">
+              Já existe paciente cadastrado com informação igual. Deseja cadastrar mesmo assim?
+            </p>
+            <div className="mt-4 space-y-2">
+              {duplicados.slice(0, 3).map(({ paciente, campos }) => (
+                <div key={paciente.id} className="rounded-xl border border-slate-200 p-3 text-sm">
+                  <p className="font-medium text-slate-700">{paciente.nome}</p>
+                  <p className="mt-1 text-xs text-slate-500">Informação repetida: {campos.join(', ')}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-5 grid grid-cols-1 gap-3 sm:flex sm:justify-end">
+              <Button variant="light" onClick={() => setDuplicados(null)}>Cancelar</Button>
+              <Button variant="dark" onClick={() => salvar(true)}>Cadastrar mesmo assim</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   )
 }
@@ -1042,20 +1096,155 @@ function ReceitaCompleta({ paciente, receita }) {
   )
 }
 
-function Historico({ paciente, setPage }) {
+function Historico({ paciente, setPage, onUpdatePaciente, onDeletePaciente }) {
+  const [form, setForm] = useState(() => ({
+    nome: paciente?.nome || '',
+    cpf: paciente?.cpf || '',
+    nascimento: paciente?.nascimento || '',
+    telefone: paciente?.telefone || '',
+    email: paciente?.email || '',
+    estado: paciente?.estado || 'SC',
+    cidade: paciente?.cidade || 'Criciúma',
+    unidade: paciente?.unidade || paciente?.cidade || 'Criciúma',
+    observacoes: paciente?.observacoes || '',
+    usa_oculos: Boolean(paciente?.usa_oculos),
+    diabetes: Boolean(paciente?.diabetes),
+    pressao_alta: Boolean(paciente?.pressao_alta),
+    outras_doencas: paciente?.outras_doencas || '',
+  }))
+  const [erro, setErro] = useState('')
+  const [status, setStatus] = useState('')
+  const [editando, setEditando] = useState(false)
+  const [confirmarExclusao, setConfirmarExclusao] = useState(false)
+
+  useEffect(() => {
+    setForm({
+      nome: paciente?.nome || '',
+      cpf: paciente?.cpf || '',
+      nascimento: paciente?.nascimento || '',
+      telefone: paciente?.telefone || '',
+      email: paciente?.email || '',
+      estado: paciente?.estado || 'SC',
+      cidade: paciente?.cidade || 'Criciúma',
+      unidade: paciente?.unidade || paciente?.cidade || 'Criciúma',
+      observacoes: paciente?.observacoes || '',
+      usa_oculos: Boolean(paciente?.usa_oculos),
+      diabetes: Boolean(paciente?.diabetes),
+      pressao_alta: Boolean(paciente?.pressao_alta),
+      outras_doencas: paciente?.outras_doencas || '',
+    })
+    setErro('')
+    setStatus('')
+    setEditando(false)
+  }, [paciente?.id])
+
+  function update(key, value) {
+    setForm((old) => ({ ...old, [key]: value }))
+  }
+
+  async function salvarPaciente() {
+    if (form.nome.trim().length < 3) {
+      setErro('Nome precisa ter pelo menos 3 letras.')
+      return
+    }
+    try {
+      await onUpdatePaciente(paciente.id, form)
+      setErro('')
+      setStatus('Dados do paciente salvos.')
+      setEditando(false)
+    } catch (error) {
+      setStatus('')
+      setErro(error.message || 'Não foi possível salvar o paciente.')
+    }
+  }
+
+  async function apagarPaciente() {
+    try {
+      await onDeletePaciente(paciente.id)
+      setConfirmarExclusao(false)
+      setPage('pacientes')
+    } catch (error) {
+      setConfirmarExclusao(false)
+      setErro(error.message || 'Não foi possível apagar o paciente.')
+    }
+  }
+
   if (!paciente) return <Empty icon={Search} title="Nenhum paciente selecionado" action={<Button onClick={() => setPage('pacientes')}>Buscar paciente</Button>} />
   const receita = paciente.receitas[0]
 
   return (
     <>
       <PageTitle title="Histórico do paciente" subtitle="Receita mais recente no topo." actions={<><Button icon={Plus} onClick={() => setPage('novoExame')}>Novo exame</Button><Button variant="light" icon={Printer} onClick={() => setPage('pdf')}>Imprimir</Button></>} />
-      <div className="mb-5 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:grid-cols-2 md:grid-cols-5 md:p-5">
-        <InfoMini label="Paciente" value={paciente.nome} />
-        <InfoMini label="Idade" value={calcularIdade(paciente.nascimento)} />
-        <InfoMini label="CPF" value={paciente.cpf || '-'} />
-        <InfoMini label="Telefone" value={paciente.telefone} />
-        <InfoMini label="Receitas" value={paciente.receitas.length} />
+      {!editando ? (
+      <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
+        <div className="mb-4 flex justify-end">
+          <Button variant="light" onClick={() => setEditando(true)}>Editar paciente</Button>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-5">
+          <InfoMini label="Paciente" value={paciente.nome} />
+          <InfoMini label="Idade" value={calcularIdade(paciente.nascimento)} />
+          <InfoMini label="CPF" value={paciente.cpf || '-'} />
+          <InfoMini label="Telefone" value={paciente.telefone || '-'} />
+          <InfoMini label="Receitas" value={paciente.receitas.length} />
+        </div>
       </div>
+      ) : (
+      <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
+        <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <div>
+            <h3 className="font-semibold text-[#0D3B66]">Dados do paciente</h3>
+            <p className="text-sm text-slate-500">Edite as informações cadastrais quando necessário.</p>
+          </div>
+          <button type="button" onClick={() => setConfirmarExclusao(true)} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-red-200 px-4 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50">
+            Apagar paciente
+          </button>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <Field label="Nome completo"><TextInput value={form.nome} onChange={(v) => update('nome', onlyName(v))} placeholder="Ex: Maria Oliveira" /></Field>
+          <Field label="CPF"><TextInput value={form.cpf} onChange={(v) => update('cpf', formatCPF(v))} placeholder="000.000.000-00" /></Field>
+          <Field label="Nascimento" hint={form.nascimento ? calcularIdade(form.nascimento) : ''}><TextInput type="date" max={hojeISO()} value={form.nascimento} onChange={(v) => update('nascimento', v)} /></Field>
+          <Field label="Telefone"><TextInput value={form.telefone} onChange={(v) => update('telefone', formatPhone(v))} placeholder="(48) 99999-9999" /></Field>
+          <Field label="E-mail"><TextInput type="email" value={form.email} onChange={(v) => update('email', v)} placeholder="email@exemplo.com" /></Field>
+          <Field label="Estado">
+            <select value={form.estado} onChange={(e) => { update('estado', e.target.value); update('cidade', getCidades(e.target.value)[0]) }} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base">
+              {estadosBrasil.map((uf) => <option key={uf}>{uf}</option>)}
+            </select>
+          </Field>
+          <Field label="Cidade">
+            <select value={form.cidade} onChange={(e) => update('cidade', e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base">
+              {getCidades(form.estado).map((cidadeItem) => <option key={cidadeItem}>{cidadeItem}</option>)}
+            </select>
+          </Field>
+          <Field label="Unidade">
+            <select value={form.unidade} onChange={(e) => update('unidade', e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base">
+              {unidadesSC.map((u) => <option key={u}>{u}</option>)}
+            </select>
+          </Field>
+          <InfoMini label="Receitas" value={paciente.receitas.length} />
+        </div>
+        <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
+          <PatientCheckbox label="Já é usuário de óculos" checked={Boolean(form.usa_oculos)} onChange={(value) => update('usa_oculos', value)} />
+          <PatientCheckbox label="Diabetes" checked={Boolean(form.diabetes)} onChange={(value) => update('diabetes', value)} />
+          <PatientCheckbox label="Pressão alta" checked={Boolean(form.pressao_alta)} onChange={(value) => update('pressao_alta', value)} />
+        </div>
+        <div className="mt-5">
+          <Field label="Outras doenças">
+            <input value={form.outras_doencas || ''} onChange={(e) => update('outras_doencas', e.target.value.slice(0, 160))} placeholder="Campo opcional" className="mt-3 w-full rounded-xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-[#0F9AA8]" />
+          </Field>
+        </div>
+        <div className="mt-5">
+          <Field label="Observações">
+            <textarea value={form.observacoes} onChange={(e) => update('observacoes', e.target.value.slice(0, 300))} className="mt-3 w-full rounded-xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-[#0F9AA8]" rows={3} />
+          </Field>
+        </div>
+        {erro ? <p className="mt-4 text-sm text-red-500">{erro}</p> : null}
+        {status ? <p className="mt-4 text-sm text-[#0F9AA8]">{status}</p> : null}
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:flex sm:justify-end">
+          <Button variant="light" onClick={() => setEditando(false)}>Cancelar edição</Button>
+          <Button icon={CheckCircle2} onClick={salvarPaciente}>Salvar alterações</Button>
+        </div>
+      </div>
+      )}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[260px_1fr]">
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
           <h3 className="mb-3 font-semibold text-[#0D3B66]">Linha do tempo</h3>
@@ -1071,6 +1260,22 @@ function Historico({ paciente, setPage }) {
         </div>
         <div>{receita ? <ReceitaCompleta paciente={paciente} receita={receita} /> : <Empty icon={FileText} title="Sem receitas" action={<Button onClick={() => setPage('novoExame')}>Novo exame</Button>} />}</div>
       </div>
+      {confirmarExclusao ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-semibold text-[#0D3B66]">Apagar paciente?</h3>
+            <p className="mt-2 text-sm text-slate-500">
+              Essa ação remove o cadastro de {paciente.nome}, além de receitas, agendamentos e PDFs vinculados. Essa ação não pode ser desfeita.
+            </p>
+            <div className="mt-5 grid grid-cols-1 gap-3 sm:flex sm:justify-end">
+              <Button variant="light" onClick={() => setConfirmarExclusao(false)}>Cancelar</Button>
+              <button type="button" onClick={apagarPaciente} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-red-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-red-700">
+                Sim, apagar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   )
 }
@@ -1747,11 +1952,63 @@ export default function OticaGestaoProFinal() {
       updated_by: usuario.id,
     }
     const { data, error } = await supabase.from('patients').insert(payload).select('*').single()
-    if (error) throw new Error(error.message.includes('duplicate') ? 'Já existe um paciente com esse CPF.' : error.message)
+    if (error) throw new Error(error.message || 'Não foi possível salvar o paciente.')
     const paciente = mapPaciente(data, [])
     setPacientes((old) => [paciente, ...old])
     setPacienteAtualId(paciente.id)
     return paciente
+  }
+
+  async function updatePaciente(patientId, form) {
+    const payload = {
+      nome: form.nome.trim(),
+      cpf: form.cpf || null,
+      nascimento: form.nascimento || null,
+      telefone: form.telefone || null,
+      email: form.email || null,
+      estado: form.estado || 'SC',
+      cidade: form.cidade || null,
+      unidade: form.unidade || form.cidade || null,
+      observacoes: form.observacoes || null,
+      usa_oculos: Boolean(form.usa_oculos),
+      diabetes: Boolean(form.diabetes),
+      pressao_alta: Boolean(form.pressao_alta),
+      outras_doencas: form.outras_doencas || null,
+      updated_by: usuario.id,
+    }
+    const { data, error } = await supabase.from('patients').update(payload).eq('id', patientId).select('*').single()
+    if (error) throw error
+    const receitas = pacientes.find((p) => p.id === patientId)?.receitas || []
+    const paciente = mapPaciente(data, receitas)
+    setPacientes((old) => old.map((item) => item.id === patientId ? paciente : item))
+    return paciente
+  }
+
+  async function deletePaciente(patientId) {
+    const arquivos = await supabase.from('prescription_files').select('storage_path').eq('patient_id', patientId)
+    if (arquivos.error) throw arquivos.error
+    const paths = (arquivos.data || []).map((item) => item.storage_path).filter(Boolean)
+    if (paths.length) {
+      const storage = await supabase.storage.from('prescriptions').remove(paths)
+      if (storage.error) throw storage.error
+    }
+
+    const deletes = await Promise.all([
+      supabase.from('prescription_files').delete().eq('patient_id', patientId),
+      supabase.from('prescriptions').delete().eq('patient_id', patientId),
+      supabase.from('appointments').delete().eq('patient_id', patientId),
+    ])
+    const erroRelacionado = deletes.find((result) => result.error)?.error
+    if (erroRelacionado) throw erroRelacionado
+
+    const { error } = await supabase.from('patients').delete().eq('id', patientId)
+    if (error) throw error
+
+    setPacientes((old) => {
+      const next = old.filter((item) => item.id !== patientId)
+      setPacienteAtualId(next[0]?.id || null)
+      return next
+    })
   }
 
   async function addReceita(patientId, receita) {
@@ -1858,9 +2115,9 @@ export default function OticaGestaoProFinal() {
   const pages = {
     dashboard: <Dashboard setPage={abrirPagina} pacientes={pacientes} agendamentos={agendamentos} usuario={usuario} />,
     pacientes: <Pacientes pacientes={pacientes} setPacienteAtual={setPacienteAtualId} setPage={setPage} canOpenHistorico={!isRecepcionista(usuario)} />,
-    novoPaciente: <NovoPaciente setPage={setPage} onSave={addPaciente} />,
+    novoPaciente: <NovoPaciente setPage={setPage} onSave={addPaciente} pacientes={pacientes} />,
     novoExame: <NovoExame key={pacienteAtual?.id || 'novo-exame-sem-paciente'} paciente={pacienteAtual} pacientes={pacientes} usuario={usuario} onSave={addReceita} setPage={setPage} />,
-    historico: <Historico paciente={pacienteAtual} setPage={setPage} />,
+    historico: <Historico paciente={pacienteAtual} setPage={setPage} onUpdatePaciente={updatePaciente} onDeletePaciente={deletePaciente} />,
     agenda: <Agenda agendamentos={agendamentos} setPage={setPage} />,
     novoAgendamento: <NovoAgendamento setPage={setPage} agendamentos={agendamentos} onSave={addAgendamento} />,
     relatorios: <Relatorios pacientes={pacientes} agendamentos={agendamentos} />,
