@@ -818,10 +818,10 @@ function NovoPaciente({ onSave, setPage }) {
           <PatientCheckbox label="Pressão alta" checked={Boolean(form.pressao_alta)} onChange={(value) => update('pressao_alta', value)} />
         </div>
         <Field label="Outras doenças">
-          <input value={form.outras_doencas || ''} onChange={(e) => update('outras_doencas', e.target.value.slice(0, 160))} placeholder="Campo opcional" className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-[#0F9AA8]" />
+          <input value={form.outras_doencas || ''} onChange={(e) => update('outras_doencas', e.target.value.slice(0, 160))} placeholder="Campo opcional" className="mt-3 w-full rounded-xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-[#0F9AA8]" />
         </Field>
         <Field label="Observações">
-          <textarea value={form.observacoes} onChange={(e) => update('observacoes', e.target.value.slice(0, 300))} className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-[#0F9AA8]" rows={4} />
+          <textarea value={form.observacoes} onChange={(e) => update('observacoes', e.target.value.slice(0, 300))} className="mt-3 w-full rounded-xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-[#0F9AA8]" rows={4} />
         </Field>
         {erro ? <p className="mt-4 text-sm text-red-500">{erro}</p> : null}
         <div className="mt-5 grid grid-cols-1 gap-3 sm:flex sm:justify-end">
