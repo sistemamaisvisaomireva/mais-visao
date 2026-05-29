@@ -655,8 +655,8 @@ function Login({ onLogin, initialError = '' }) {
         <div className="mb-8 flex items-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#0F9AA8] font-semibold text-white">O+</div>
           <div>
-            <h1 className="text-xl font-semibold text-[#0D3B66]">Opta+ Gestão Pro</h1>
-            <p className="text-sm text-slate-500">Sistema interno Opta+</p>
+            <h1 className="text-xl font-semibold text-[#0D3B66]">Opto+ Gestão Pro</h1>
+            <p className="text-sm text-slate-500">Sistema interno Opto+</p>
           </div>
         </div>
         <div className="space-y-4">
@@ -726,7 +726,7 @@ function Sidebar({ page, setPage, usuario, onLogout }) {
         <div className="mb-5 flex items-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#0F9AA8] font-semibold text-white shadow-lg shadow-cyan-950/30">O+</div>
           <div>
-            <h1 className="font-semibold tracking-wide">Opta+</h1>
+            <h1 className="font-semibold tracking-wide">Opto+</h1>
             <p className="text-xs text-cyan-50/60">Gestão optométrica</p>
           </div>
         </div>
@@ -813,7 +813,7 @@ function HeroPanel({ usuario, pacientes, agendamentos, receitasTotal }) {
       <div className="grid gap-6 xl:grid-cols-[1.45fr_1fr] xl:items-center">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-100/70">Painel operacional</p>
-          <h2 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">Visão geral da Opta+</h2>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">Visão geral da Opto+</h2>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-cyan-50/75">Atendimentos, agenda e prescrições reunidos em uma central rápida para tomada de decisão.</p>
           <div className="mt-6 flex flex-wrap gap-3">
             <span className="rounded-full bg-white/10 px-4 py-2 text-sm text-cyan-50">{usuario.nome}</span>
@@ -1266,7 +1266,7 @@ function NovoPaciente({ onSave, setPage, pacientes = [] }) {
 
   return (
     <>
-      <PageTitle title="Novo paciente" subtitle="Ficha rápida." />
+      <PageTitle title="FICHA DE ANAMINESE PARA EXAME OPTOMÉTRICO" subtitle="Novo paciente." />
       <div className="max-w-5xl rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <Field label="Nome completo"><TextInput value={form.nome} onChange={(v) => update('nome', onlyName(v))} placeholder="Ex: Maria Oliveira" /></Field>
@@ -1893,18 +1893,17 @@ function Relatorios({ pacientes, agendamentos }) {
   return (
     <DashboardShell>
       <section className="rounded-[2rem] bg-white p-5 shadow-sm shadow-slate-200/70">
-        <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
+        <div>
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#0F9AA8]">Analytics</p>
             <h2 className="mt-2 text-3xl font-semibold text-[#0D3B66]">Relatórios</h2>
             <p className="mt-1 text-sm text-slate-500">Indicadores de atendimentos, receitas, agenda, cidades e estados.</p>
           </div>
-          <Button variant="dark" icon={Download}>Exportar {visao}</Button>
         </div>
       </section>
 
       <section className="grid grid-cols-1 gap-4 rounded-[2rem] border border-white/70 bg-white p-4 shadow-sm shadow-slate-200/70 md:grid-cols-3">
-        <Field label="Mês / visão"><select value={visao} onChange={(e) => setVisao(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base outline-none focus:border-[#0F9AA8]"><option>Dia</option><option>Semana</option><option>Mês</option><option>Ano</option></select></Field>
+        <Field label="Mês / visão"><select value={visao} onChange={(e) => setVisao(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base outline-none focus:border-[#0F9AA8]"><option>Semana</option><option>Mês</option><option>Ano</option></select></Field>
         <Field label="Estado"><select value={estado} onChange={(e) => { setEstado(e.target.value); setCidade('Todas') }} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base outline-none focus:border-[#0F9AA8]">{estadosBrasil.map((uf) => <option key={uf}>{uf}</option>)}</select></Field>
         <CidadeRelatorioField value={cidade} estado={estado} onChange={setCidade} />
       </section>
@@ -2096,14 +2095,14 @@ function ReceitaPdfTabela({ titulo, dados }) {
       </thead>
       <tbody>
         <tr>
-          <th>OD</th>
+          <th>Olho<br />Direito</th>
           <GrauCell value={dados?.od?.esf} />
           <GrauCell value={dados?.od?.cil} />
           <GrauCell value={dados?.od?.eixo} />
           <GrauCell value={dados?.od?.dnp} />
         </tr>
         <tr>
-          <th>OE</th>
+          <th>Olho<br />Esquerdo</th>
           <GrauCell value={dados?.oe?.esf} />
           <GrauCell value={dados?.oe?.cil} />
           <GrauCell value={dados?.oe?.eixo} />
@@ -2115,19 +2114,28 @@ function ReceitaPdfTabela({ titulo, dados }) {
 }
 
 function CurvaOptica({ label }) {
-  const rays = Array.from({ length: 17 }, (_, index) => index)
-  const baseY = 68
+  const marks = Array.from({ length: 19 }, (_, index) => index * 10)
+  const rays = Array.from({ length: 19 }, (_, index) => index)
+  const baseX = 120
+  const baseY = 104
+  const radius = 90
   return (
     <div className="pdf-curve">
-      <svg viewBox="0 0 170 76" aria-hidden="true">
-        <path d={`M20 ${baseY} A65 65 0 0 1 150 ${baseY}`} />
-        <path d={`M30 ${baseY} A55 55 0 0 1 140 ${baseY}`} />
-        <path d={`M40 ${baseY} A45 45 0 0 1 130 ${baseY}`} />
+      <svg viewBox="0 0 240 126" aria-hidden="true">
+        <path d={`M${baseX - radius} ${baseY} A${radius} ${radius} 0 0 1 ${baseX + radius} ${baseY}`} />
+        <path d={`M${baseX - 72} ${baseY} A72 72 0 0 1 ${baseX + 72} ${baseY}`} />
+        <path d={`M${baseX - 54} ${baseY} A54 54 0 0 1 ${baseX + 54} ${baseY}`} />
         {rays.map((item) => {
-          const angle = 180 - item * 11.25
-          const x = 85 + Math.cos((angle * Math.PI) / 180) * 65
-          const y = baseY - Math.sin((angle * Math.PI) / 180) * 65
-          return <line key={item} x1="85" y1={baseY} x2={x} y2={y} />
+          const angle = 180 - item * 10
+          const x = baseX + Math.cos((angle * Math.PI) / 180) * radius
+          const y = baseY - Math.sin((angle * Math.PI) / 180) * radius
+          return <line key={item} x1={baseX} y1={baseY} x2={x} y2={y} />
+        })}
+        {marks.map((mark) => {
+          const angle = 180 - mark
+          const x = baseX + Math.cos((angle * Math.PI) / 180) * 108
+          const y = baseY - Math.sin((angle * Math.PI) / 180) * 108
+          return <text key={mark} x={x} y={y} textAnchor="middle">{mark}</text>
         })}
       </svg>
       <span>{label}</span>
@@ -2147,7 +2155,7 @@ function PdfInfoItem({ label, value }) {
 function PdfCheckbox({ label, checked }) {
   return (
     <span className={`pdf-check ${checked ? 'is-checked' : ''}`}>
-      <span>{checked ? '✓' : ''}</span>
+      <span />
       <span className="pdf-check-label">{label}</span>
     </span>
   )
@@ -2172,29 +2180,23 @@ function CarimboOptometrista({ responsavel }) {
 function ReceitaPdfLayout({ paciente, receita }) {
   const data = dataPartesBR(receita?.data)
   const diagnosticos = receita?.diagnosticos || []
+  const lentes = receita?.lentes || []
 
   return (
     <section className="pdf-page">
       <header className="pdf-header">
-        <img src="/logo-optica-plus.jpg" alt="Optic+ Clínica de Optometria" />
-        <div>
-          <h1>Prescrição de Óculos</h1>
-          <p>Documento de atendimento optométrico</p>
-        </div>
+        <img src="/logo-optica-plus.jpg" alt="Opto+ Clínica de Optometria" />
+        <h1>Prescrição de Óculos</h1>
       </header>
 
-      <section className="pdf-patient-card">
-        <PdfInfoItem label="Paciente" value={paciente?.nome} />
-        <PdfInfoItem label="CPF" value={paciente?.cpf} />
-        <PdfInfoItem label="Idade" value={calcularIdade(paciente?.nascimento)} />
-        <PdfInfoItem label="Telefone" value={paciente?.telefone} />
-        <PdfInfoItem label="Unidade" value={receita?.unidade || paciente?.unidade} />
-        <PdfInfoItem label="Responsável" value={receita?.responsavel} />
+      <section className="pdf-patient-line">
+        <span>Para Sr.(a)</span>
+        <strong>{paciente?.nome || ''}</strong>
       </section>
 
       <div className="pdf-curves">
-        <div className="pdf-curve-card"><CurvaOptica label="O.D." /></div>
-        <div className="pdf-curve-card"><CurvaOptica label="O.E." /></div>
+        <CurvaOptica label="O.D." />
+        <CurvaOptica label="O.E." />
       </div>
 
       <div className="pdf-tables">
@@ -2203,7 +2205,6 @@ function ReceitaPdfLayout({ paciente, receita }) {
       </div>
 
       <section className="pdf-section">
-        <h2>Diagnósticos</h2>
         <div className="pdf-diagnosticos">
           <PdfCheckbox label="Miopia" checked={diagnosticos.includes('Miopia')} />
           <PdfCheckbox label="Hipermetropia" checked={diagnosticos.includes('Hipermetropia')} />
@@ -2212,26 +2213,35 @@ function ReceitaPdfLayout({ paciente, receita }) {
         </div>
       </section>
 
+      <section className="pdf-instructions">
+        <p>1 - É normal nos primeiros dias sentir tontura, cefaléia, náuseas, ver desníveis no chão ou em escadas</p>
+        <p>2 - Para Multifocal ou Bifocal a adaptação poderá levar de 07 a 15 dias, podendo ter os mesmos sintomas acima</p>
+        <p>3 - Um exame de vista é sempre oportuno antes do seu filho começar a estudar</p>
+      </section>
+
+      <section className="pdf-lenses">
+        {lentesOptions.map((label) => (
+          <PdfCheckbox key={label} label={label} checked={lentes.includes(label)} />
+        ))}
+      </section>
+
       <section className="pdf-obs">
-        <span>Observações</span>
+        <span>Obs.</span>
         <p>{receita?.obs || ''}</p>
       </section>
 
       <div className="pdf-footer">
-        <div>
-          <div className="pdf-signature-line" />
-          <p className="pdf-signature-label">Assinatura do responsável</p>
-          <div className="pdf-date">
-            <span className="pdf-date-label">Data</span>
-            <span className="pdf-date-field">{data.dia}</span>
-            <span className="pdf-date-separator">/</span>
-            <span className="pdf-date-field">{data.mes}</span>
-            <span className="pdf-date-separator">/</span>
-            <span className="pdf-date-field pdf-date-year">{data.ano}</span>
-          </div>
+        <div className="pdf-date">
+          <span className="pdf-date-label">Data</span>
+          <span className="pdf-date-field">{data.dia}</span>
+          <span className="pdf-date-separator">/</span>
+          <span className="pdf-date-field">{data.mes}</span>
+          <span className="pdf-date-separator">/202</span>
+          <span className="pdf-date-field pdf-date-year">{String(data.ano || '').slice(-1)}</span>
         </div>
-        <CarimboOptometrista responsavel={receita?.responsavel} />
+        <div className="pdf-signature-line" />
       </div>
+      <p className="pdf-credit">Coral Gráfica - whatsapp 98443-5667 - mar/2024</p>
     </section>
   )
 }
@@ -2250,29 +2260,41 @@ function Pdf({ paciente, usuario }) {
         import('jspdf'),
       ])
       let canvas
+      let renderHost
       document.body.classList.add('pdf-export-mode')
       try {
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
         const pageElement = printRef.current.querySelector('.pdf-page')
-        canvas = await html2canvas(pageElement, {
+        const clonedPage = pageElement.cloneNode(true)
+        renderHost = document.createElement('div')
+        renderHost.className = 'pdf-capture-host'
+        renderHost.appendChild(clonedPage)
+        document.body.appendChild(renderHost)
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+        canvas = await html2canvas(clonedPage, {
           backgroundColor: '#ffffff',
-          scale: 1.35,
+          scale: 2,
           useCORS: true,
           logging: false,
+          scrollX: 0,
+          scrollY: 0,
+          width: 794,
+          height: 1123,
           windowWidth: 794,
           windowHeight: 1123,
         })
       } finally {
+        renderHost?.remove()
         document.body.classList.remove('pdf-export-mode')
       }
-      const imgData = canvas.toDataURL('image/jpeg', 0.82)
+      const imgData = canvas.toDataURL('image/png')
       const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4', compress: true })
       const pageWidth = pdf.internal.pageSize.getWidth()
       const pageHeight = pdf.internal.pageSize.getHeight()
       const margin = 0
       const imgWidth = pageWidth - margin * 2
-      const imgHeight = (canvas.height * imgWidth) / canvas.width
-      pdf.addImage(imgData, 'JPEG', margin, margin, imgWidth, Math.min(imgHeight, pageHeight - margin * 2), undefined, 'FAST')
+      const imgHeight = pageHeight - margin * 2
+      pdf.addImage(imgData, 'PNG', margin, margin, imgWidth, imgHeight, undefined, 'FAST')
       const blob = pdf.output('blob')
       if (blob.size > 25 * 1024 * 1024) {
         throw new Error('O PDF ficou grande demais. Reduza as observações ou tente gerar novamente.')

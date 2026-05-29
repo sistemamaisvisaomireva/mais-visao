@@ -787,6 +787,473 @@ body.pdf-export-mode .pdf-stamp b {
   font-size: 22px;
 }
 
+/* Modelo de receita do cliente: uma prescrição por página. */
+.pdf-page,
+body.pdf-export-mode .pdf-page {
+  width: 794px;
+  max-width: none;
+  min-width: 794px;
+  min-height: 1123px;
+  height: 1123px;
+  margin: 0 auto;
+  padding: 34px 54px 22px;
+  display: flex;
+  flex-direction: column;
+  border: 0;
+  border-radius: 0;
+  background: #ffffff;
+  color: #2f3037;
+  font-family: Arial, Helvetica, sans-serif;
+  box-shadow: 0 18px 45px rgb(15 23 42 / 0.08);
+  overflow: hidden;
+}
+
+.pdf-header,
+body.pdf-export-mode .pdf-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 28px;
+  padding: 0;
+  border: 0;
+  text-align: center;
+}
+
+.pdf-header img,
+body.pdf-export-mode .pdf-header img {
+  width: 236px;
+  height: auto;
+  margin: 0;
+  object-fit: contain;
+}
+
+.pdf-header h1,
+body.pdf-export-mode .pdf-header h1 {
+  margin: 0;
+  color: #2f3037;
+  font-size: 24px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.pdf-patient-line,
+body.pdf-export-mode .pdf-patient-line {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px;
+  align-items: end;
+  margin: 0 0 18px;
+  color: #2f3037;
+  font-size: 13px;
+}
+
+.pdf-patient-line span,
+body.pdf-export-mode .pdf-patient-line span {
+  white-space: nowrap;
+}
+
+.pdf-patient-line strong,
+body.pdf-export-mode .pdf-patient-line strong {
+  display: block;
+  min-height: 18px;
+  border-bottom: 1px solid #33343a;
+  color: #2f3037;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.pdf-curves,
+body.pdf-export-mode .pdf-curves {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 52px;
+  margin: 0 36px 8px;
+}
+
+.pdf-curve-card,
+body.pdf-export-mode .pdf-curve-card {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.pdf-curve,
+body.pdf-export-mode .pdf-curve {
+  text-align: center;
+  color: #2f3037;
+  font-size: 18px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.pdf-curve svg,
+body.pdf-export-mode .pdf-curve svg {
+  width: 100%;
+  height: 124px;
+  overflow: visible;
+}
+
+.pdf-curve path,
+.pdf-curve line,
+body.pdf-export-mode .pdf-curve path,
+body.pdf-export-mode .pdf-curve line {
+  fill: none;
+  stroke: #2f3037;
+  stroke-width: 1;
+}
+
+.pdf-curve text,
+body.pdf-export-mode .pdf-curve text {
+  fill: #2f3037;
+  font-size: 8px;
+  font-weight: 400;
+}
+
+.pdf-curve span,
+body.pdf-export-mode .pdf-curve span {
+  display: block;
+  margin-top: -7px;
+  line-height: 1;
+}
+
+.pdf-tables,
+body.pdf-export-mode .pdf-tables {
+  display: grid;
+  gap: 10px;
+  margin: 0 20px;
+}
+
+.pdf-table,
+body.pdf-export-mode .pdf-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  border: 1px solid #303139;
+  border-radius: 0;
+  color: #2f3037;
+  font-size: 16px;
+  overflow: visible;
+}
+
+.pdf-table th,
+.pdf-table td,
+body.pdf-export-mode .pdf-table th,
+body.pdf-export-mode .pdf-table td {
+  height: 52px;
+  padding: 5px 8px;
+  border: 1px solid #303139;
+  text-align: center;
+  vertical-align: middle;
+  line-height: 1.12;
+}
+
+.pdf-table thead th,
+body.pdf-export-mode .pdf-table thead th {
+  height: 30px;
+  background: #303139;
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.pdf-table thead th:first-child,
+body.pdf-export-mode .pdf-table thead th:first-child {
+  background: #303139;
+  color: #ffffff;
+}
+
+.pdf-table tbody th,
+body.pdf-export-mode .pdf-table tbody th {
+  width: 88px;
+  background: #ffffff;
+  color: #2f3037;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.12;
+}
+
+.pdf-section,
+body.pdf-export-mode .pdf-section {
+  margin: 6px 20px 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.pdf-diagnosticos,
+body.pdf-export-mode .pdf-diagnosticos {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  margin: 0;
+  font-size: 14px;
+}
+
+.pdf-check,
+body.pdf-export-mode .pdf-check {
+  position: relative;
+  display: inline-flex;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #2f3037;
+  font-size: 14px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.pdf-check > span:first-child,
+body.pdf-export-mode .pdf-check > span:first-child {
+  position: static;
+  display: inline-flex;
+  width: 12px;
+  height: 12px;
+  align-items: center;
+  justify-content: center;
+  border: 1.4px solid #2f3037;
+  border-radius: 0;
+  color: transparent;
+  font-size: 0;
+  line-height: 0;
+}
+
+.pdf-check.is-checked > span:first-child::after,
+body.pdf-export-mode .pdf-check.is-checked > span:first-child::after {
+  position: static;
+  display: block;
+  width: 9px;
+  height: 9px;
+  content: "";
+  background:
+    linear-gradient(45deg, transparent 42%, #2f3037 43%, #2f3037 57%, transparent 58%),
+    linear-gradient(-45deg, transparent 42%, #2f3037 43%, #2f3037 57%, transparent 58%);
+}
+
+.pdf-check-label,
+body.pdf-export-mode .pdf-check-label {
+  position: static;
+  display: inline;
+  width: auto;
+  height: auto;
+  color: #2f3037;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.1;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.pdf-instructions,
+body.pdf-export-mode .pdf-instructions {
+  margin: 6px 20px 5px;
+  color: #2f3037;
+  font-size: 11px;
+  line-height: 1.08;
+}
+
+.pdf-instructions p,
+body.pdf-export-mode .pdf-instructions p {
+  margin: 0;
+}
+
+.pdf-lenses,
+body.pdf-export-mode .pdf-lenses {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  justify-content: center;
+  gap: 9px 82px;
+  margin: 7px 20px 12px;
+  font-size: 18px;
+}
+
+.pdf-lenses .pdf-check,
+body.pdf-export-mode .pdf-lenses .pdf-check {
+  font-size: 18px;
+}
+
+.pdf-lenses .pdf-check > span:first-child,
+body.pdf-export-mode .pdf-lenses .pdf-check > span:first-child {
+  width: 15px;
+  height: 15px;
+  font-size: 10px;
+}
+
+.pdf-lenses .pdf-check-label,
+body.pdf-export-mode .pdf-lenses .pdf-check-label {
+  font-size: 18px;
+}
+
+.pdf-obs,
+body.pdf-export-mode .pdf-obs {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px;
+  align-items: end;
+  margin: 0 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.pdf-obs span,
+body.pdf-export-mode .pdf-obs span {
+  display: block;
+  color: #2f3037;
+  font-size: 18px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 22px;
+  text-transform: none;
+}
+
+.pdf-obs p,
+body.pdf-export-mode .pdf-obs p {
+  min-height: 22px;
+  margin: 0;
+  padding: 0 4px 1px;
+  border-bottom: 1px solid #33343a;
+  color: #2f3037;
+  font-size: 14px;
+  line-height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.pdf-footer,
+body.pdf-export-mode .pdf-footer {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 50px;
+  align-items: end;
+  min-height: 78px;
+  margin: auto 0 0;
+  padding-top: 18px;
+  border-top: 1px solid #33343a;
+  page-break-inside: avoid;
+}
+
+.pdf-date,
+body.pdf-export-mode .pdf-date {
+  display: flex;
+  align-items: end;
+  gap: 0;
+  margin: 0;
+  color: #2f3037;
+  font-size: 18px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.pdf-date-label,
+body.pdf-export-mode .pdf-date-label {
+  margin-right: 6px;
+  color: #2f3037;
+  font-weight: 400;
+}
+
+.pdf-date-field,
+body.pdf-export-mode .pdf-date-field {
+  display: inline-flex;
+  min-width: 48px;
+  height: 22px;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 0;
+  border-bottom: 1px solid #33343a;
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.pdf-date-year,
+body.pdf-export-mode .pdf-date-year {
+  min-width: 28px;
+}
+
+.pdf-date-separator,
+body.pdf-export-mode .pdf-date-separator {
+  display: inline-flex;
+  height: 22px;
+  align-items: flex-start;
+  color: #2f3037;
+}
+
+.pdf-signature-line,
+body.pdf-export-mode .pdf-signature-line {
+  width: 100%;
+  max-width: none;
+  border-bottom: 1px solid #33343a;
+}
+
+.pdf-credit,
+body.pdf-export-mode .pdf-credit {
+  margin: 1px 0 0;
+  color: #2f3037;
+  font-size: 6px;
+  line-height: 1;
+  text-align: center;
+}
+
+body.pdf-export-mode .print-area {
+  width: 794px;
+  min-width: 794px;
+  max-width: none;
+  justify-content: flex-start;
+  overflow: visible;
+}
+
+.pdf-capture-host {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: -1;
+  width: 794px;
+  height: 1123px;
+  overflow: hidden;
+  background: #ffffff;
+  pointer-events: none;
+}
+
+.pdf-capture-host .pdf-page {
+  width: 794px !important;
+  min-width: 794px !important;
+  max-width: none !important;
+  height: 1123px !important;
+  min-height: 1123px !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+}
+
+@media (max-width: 720px) {
+  .print-area {
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
+
+  .pdf-page {
+    width: 794px;
+    min-width: 794px;
+    max-width: none;
+    height: 1123px;
+    padding: 34px 54px 22px;
+    box-shadow: none;
+  }
+}
+
 @page {
   size: A4 portrait;
   margin: 0;
