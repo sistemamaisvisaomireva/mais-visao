@@ -33,6 +33,8 @@ const cidadesPorEstado = {
 
 const cidadesPadrao = ['Capital', 'Interior']
 const unidadesSC = ['Garopaba', 'Imbituba', 'Laguna', 'Criciúma', 'Tubarão', 'Torres - RS', 'Sombrio - SC', 'Orleans - SC', 'São João Batista - SC']
+const cidadesBrasilFallback = Object.entries(cidadesPorEstado).flatMap(([uf, cidades]) => cidades.map((nome) => ({ nome, uf, label: `${nome} - ${uf}` })))
+let cidadesBrasilPromise = null
 const diagnosticosOptions = ['Miopia', 'Hipermetropia', 'Astigmatismo', 'Presbiopia']
 const lentesOptions = ['Multifocal', 'Bifocal', 'VS', 'Fotossensível', 'A.R.', 'Incolor']
 const statusOptions = ['Confirmado', 'Agendado', 'Cancelado', 'Atendido']
@@ -193,6 +195,35 @@ function getCidades(estado) {
   return cidadesPorEstado[estado] || cidadesPadrao
 }
 
+function isOpticaExternaValue(unidade, cidade) {
+  return Boolean(unidade && unidade !== cidade && !unidadesSC.includes(unidade))
+}
+
+function normalizarBusca(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+}
+
+function carregarCidadesBrasil() {
+  if (!cidadesBrasilPromise) {
+    cidadesBrasilPromise = fetch('https://servicodados.ibge.gov.br/api/v1/localidades/municipios?orderBy=nome')
+      .then((response) => {
+        if (!response.ok) throw new Error('Não foi possível carregar municípios.')
+        return response.json()
+      })
+      .then((items) => items
+        .map((item) => {
+          const uf = item?.microrregiao?.mesorregiao?.UF?.sigla || item?.['regiao-imediata']?.['regiao-intermediaria']?.UF?.sigla || ''
+          return { nome: item.nome, uf, label: `${item.nome}${uf ? ` - ${uf}` : ''}` }
+        })
+        .filter((item) => item.nome && item.uf))
+      .catch(() => cidadesBrasilFallback)
+  }
+  return cidadesBrasilPromise
+}
+
 function dataISO(value) {
   return value ? String(value).slice(0, 10) : ''
 }
@@ -217,6 +248,7 @@ function mapReceita(row) {
   return {
     id: row.id,
     data: dataISO(row.data),
+    created_at: row.created_at || row.data || '',
     unidade: row.unidade || '',
     responsavel: row.responsavel_nome || '',
     diagnosticos: row.diagnosticos || [],
@@ -278,6 +310,58 @@ function getTodasReceitas(pacientes) {
   return pacientes.flatMap((paciente) => (paciente.receitas || []).map((receita) => ({ ...receita, paciente })))
 }
 
+function receitaNoPeriodo(receita, visao, offset = 0, base = hojeISO()) {
+  const data = dataParaDia(receita.data)
+  const atual = dataParaDia(base)
+  if (!data || !atual) return false
+
+  if (visao === 'Dia') {
+    const alvo = new Date(atual)
+    alvo.setDate(alvo.getDate() + offset)
+    return data.toISOString().slice(0, 10) === alvo.toISOString().slice(0, 10)
+  }
+
+  if (visao === 'Semana') {
+    const inicio = new Date(atual)
+    inicio.setDate(atual.getDate() - atual.getDay() + (offset * 7))
+    const fim = new Date(inicio)
+    fim.setDate(inicio.getDate() + 6)
+    return data >= inicio && data <= fim
+  }
+
+  if (visao === 'Ano') {
+    return data.getFullYear() === atual.getFullYear() + offset
+  }
+
+  const alvo = new Date(atual.getFullYear(), atual.getMonth() + offset, 1)
+  return data.getFullYear() === alvo.getFullYear() && data.getMonth() === alvo.getMonth()
+}
+
+function agruparContagem(items, getLabel) {
+  const mapa = items.reduce((acc, item) => {
+    const label = getLabel(item) || 'Sem informação'
+    acc[label] = (acc[label] || 0) + 1
+    return acc
+  }, {})
+
+  return Object.entries(mapa)
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value)
+}
+
+function porcentagem(value, total) {
+  return total ? Math.round((value / total) * 100) : 0
+}
+
+function deltaPercentual(atual, anterior) {
+  if (!anterior) return atual ? 100 : 0
+  return Math.round(((atual - anterior) / anterior) * 100)
+}
+
+function pacienteExterno(paciente) {
+  return isOpticaExternaValue(paciente?.unidade, paciente?.cidade)
+}
+
 function slugArquivo(value) {
   return (value || 'receita')
     .normalize('NFD')
@@ -333,6 +417,179 @@ function TextInput({ value, onChange, placeholder, type = 'text', max, min, read
       placeholder={placeholder}
       className={`min-w-0 w-full rounded-xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-[#0F9AA8] ${readOnly ? 'bg-slate-50 text-slate-500' : 'bg-white'}`}
     />
+  )
+}
+
+function CidadeAtendimentoField({ value, estado, onSelect }) {
+  const selectedLabel = value ? `${value}${estado ? ` - ${estado}` : ''}` : ''
+  const [query, setQuery] = useState(selectedLabel)
+  const [cidades, setCidades] = useState(cidadesBrasilFallback)
+  const [loading, setLoading] = useState(false)
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (!open) setQuery(selectedLabel)
+  }, [open, selectedLabel])
+
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    carregarCidadesBrasil()
+      .then((items) => {
+        if (active) setCidades(items)
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => { active = false }
+  }, [])
+
+  const resultados = useMemo(() => {
+    const termo = normalizarBusca(query)
+    const cidadesDoEstado = cidades.filter((cidade) => cidade.uf === estado)
+    const lista = termo
+      ? cidadesDoEstado.filter((cidade) => normalizarBusca(cidade.nome).includes(termo))
+      : cidadesDoEstado
+    return lista.slice(0, 40)
+  }, [cidades, estado, query])
+
+  function selecionar(cidade) {
+    setQuery(cidade.label)
+    setOpen(false)
+    onSelect({ cidade: cidade.nome, estado: cidade.uf })
+  }
+
+  function mudarBusca(value) {
+    setQuery(value)
+    setOpen(true)
+    if (value !== selectedLabel) onSelect({ cidade: '', estado })
+  }
+
+  return (
+    <div className="relative">
+      <span className="mb-1.5 block text-sm text-slate-500">Local de Atendimento</span>
+      <input
+        value={query}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 120)}
+        onChange={(event) => mudarBusca(event.target.value)}
+        placeholder="Digite a cidade"
+        className="min-w-0 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base outline-none focus:border-[#0F9AA8]"
+      />
+      {open ? (
+        <div className="absolute left-0 right-0 top-full z-30 mt-2 max-h-64 overflow-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-200/80">
+          {loading ? <p className="px-3 py-2 text-sm text-slate-500">Carregando cidades...</p> : null}
+          {!loading && resultados.length === 0 ? <p className="px-3 py-2 text-sm text-slate-500">Nenhuma cidade encontrada.</p> : null}
+          {resultados.map((cidade) => (
+            <button
+              key={`${cidade.nome}-${cidade.uf}`}
+              type="button"
+              onMouseDown={(event) => {
+                event.preventDefault()
+                selecionar(cidade)
+              }}
+              className="block w-full rounded-xl px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-[#0F9AA8]/10 hover:text-[#0D3B66]"
+            >
+              {cidade.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function CidadeRelatorioField({ value, estado, onChange }) {
+  const [query, setQuery] = useState(value === 'Todas' ? 'Todas' : value || '')
+  const [cidades, setCidades] = useState(cidadesBrasilFallback)
+  const [loading, setLoading] = useState(false)
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    setQuery(value === 'Todas' ? 'Todas' : value || '')
+  }, [value])
+
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    carregarCidadesBrasil()
+      .then((items) => {
+        if (active) setCidades(items)
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => { active = false }
+  }, [])
+
+  const resultados = useMemo(() => {
+    const termo = normalizarBusca(query === 'Todas' ? '' : query)
+    const cidadesDoEstado = cidades.filter((cidade) => cidade.uf === estado)
+    const filtradas = termo
+      ? cidadesDoEstado.filter((cidade) => normalizarBusca(cidade.nome).includes(termo))
+      : cidadesDoEstado
+    return filtradas.slice(0, 40)
+  }, [cidades, estado, query])
+
+  function selecionarTodas() {
+    setQuery('Todas')
+    setOpen(false)
+    onChange('Todas')
+  }
+
+  function selecionarCidade(cidade) {
+    setQuery(cidade.nome)
+    setOpen(false)
+    onChange(cidade.nome)
+  }
+
+  function mudarBusca(nextValue) {
+    setQuery(nextValue)
+    setOpen(true)
+    if (!nextValue.trim()) onChange('Todas')
+  }
+
+  return (
+    <div className="relative">
+      <span className="mb-1.5 block text-sm text-slate-500">Cidade</span>
+      <input
+        value={query}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 120)}
+        onChange={(event) => mudarBusca(event.target.value)}
+        placeholder="Todas"
+        className="min-w-0 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base outline-none focus:border-[#0F9AA8]"
+      />
+      {open ? (
+        <div className="absolute left-0 right-0 top-full z-30 mt-2 max-h-72 overflow-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-200/80">
+          <button
+            type="button"
+            onMouseDown={(event) => {
+              event.preventDefault()
+              selecionarTodas()
+            }}
+            className="block w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-[#0D3B66] transition hover:bg-[#0F9AA8]/10"
+          >
+            Todas
+          </button>
+          {loading ? <p className="px-3 py-2 text-sm text-slate-500">Carregando cidades...</p> : null}
+          {!loading && resultados.length === 0 ? <p className="px-3 py-2 text-sm text-slate-500">Nenhuma cidade encontrada.</p> : null}
+          {resultados.map((cidade) => (
+            <button
+              key={`${cidade.nome}-${cidade.uf}`}
+              type="button"
+              onMouseDown={(event) => {
+                event.preventDefault()
+                selecionarCidade(cidade)
+              }}
+              className="block w-full rounded-xl px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-[#0F9AA8]/10 hover:text-[#0D3B66]"
+            >
+              {cidade.nome}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   )
 }
 
@@ -645,6 +902,185 @@ function DonutPanel({ title, value, total, items }) {
   )
 }
 
+function ReportMetricCard({ title, value, icon: Icon, delta, helper, accent = '#0F9AA8' }) {
+  const positive = delta >= 0
+  return (
+    <div className="group min-h-40 rounded-3xl border border-white/70 bg-white p-5 shadow-sm shadow-slate-200/70 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-slate-200/80">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs font-semibold text-[#0D3B66]">{title}</p>
+        <div className="flex h-11 w-11 items-center justify-center rounded-2xl" style={{ backgroundColor: `${accent}18`, color: accent }}>
+          <Icon size={20} />
+        </div>
+      </div>
+      <strong className="mt-5 block text-3xl font-semibold text-[#0D3B66]">{value}</strong>
+      <div className="mt-4 flex items-center gap-2 text-xs">
+        <span className={`font-semibold ${positive ? 'text-emerald-500' : 'text-red-500'}`}>{positive ? '+' : ''}{delta}%</span>
+        <span className="text-slate-400">{helper}</span>
+      </div>
+      <div className="mt-4 h-9">
+        <svg viewBox="0 0 120 36" className="h-full w-full" preserveAspectRatio="none">
+          <path d="M2 27 C18 31, 24 18, 40 22 S64 31, 78 17 S98 11, 118 18" fill="none" stroke={accent} strokeWidth="4" strokeLinecap="round" opacity="0.85" />
+        </svg>
+      </div>
+    </div>
+  )
+}
+
+function SegmentedControl({ value, options, onChange }) {
+  return (
+    <div className="grid overflow-hidden rounded-xl border border-slate-200 bg-slate-50 sm:inline-grid sm:grid-flow-col">
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => onChange(option.value)}
+          className={`px-4 py-2 text-xs font-semibold transition ${value === option.value ? 'bg-[#0F9AA8] text-white' : 'text-slate-500 hover:bg-white'}`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function SmoothLineChart({ title, subtitle, data, mode, setMode }) {
+  const max = Math.max(...data.map((item) => item.value), 1)
+  const points = data.map((item, index) => {
+    const x = data.length === 1 ? 50 : (index / (data.length - 1)) * 100
+    const y = 92 - ((item.value / max) * 72)
+    return { ...item, x, y }
+  })
+  const line = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ')
+
+  return (
+    <div className="rounded-[2rem] border border-white/70 bg-white p-5 shadow-sm shadow-slate-200/70">
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+        <div>
+          <h3 className="font-semibold text-[#0D3B66]">{title}</h3>
+          <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+        </div>
+        <SegmentedControl
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: 'hora', label: 'Por hora' },
+            { value: 'semana', label: 'Por dia da semana' },
+            { value: 'tipo', label: 'Por tipo' },
+          ]}
+        />
+      </div>
+      <div className="mt-6 overflow-x-auto">
+        <div className="min-w-[520px]">
+          <svg viewBox="0 0 100 100" className="h-64 w-full overflow-visible">
+            {[20, 40, 60, 80].map((lineY) => <line key={lineY} x1="0" x2="100" y1={lineY} y2={lineY} stroke="#E2E8F0" strokeWidth="0.5" />)}
+            <path d={`${line} L 100 96 L 0 96 Z`} fill="#0F9AA8" opacity="0.09" />
+            <path d={line} fill="none" stroke="#0F9AA8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+            {points.map((point) => (
+              <g key={point.label}>
+                <circle cx={point.x} cy={point.y} r="2.2" fill="#0F9AA8" stroke="white" strokeWidth="1.2" />
+                <text x={point.x} y="99" textAnchor="middle" className="fill-slate-400 text-[3.7px]">{point.label}</text>
+                <text x={point.x} y={Math.max(point.y - 5, 8)} textAnchor="middle" className="fill-[#0D3B66] text-[4px] font-semibold">{point.value}</text>
+              </g>
+            ))}
+          </svg>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DonutBreakdown({ title, subtitle, items }) {
+  const total = Math.max(items.reduce((sum, item) => sum + item.value, 0), 1)
+  let start = 0
+  const colors = ['#0F9AA8', '#8ED7DC', '#0D3B66', '#B8E8EC']
+  const gradient = items.map((item, index) => {
+    const angle = (item.value / total) * 360
+    const part = `${colors[index % colors.length]} ${start}deg ${start + angle}deg`
+    start += angle
+    return part
+  }).join(', ')
+
+  return (
+    <div className="rounded-[2rem] border border-white/70 bg-white p-5 shadow-sm shadow-slate-200/70">
+      <h3 className="font-semibold text-[#0D3B66]">{title}</h3>
+      <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+      <div className="mt-7 grid gap-6 md:grid-cols-[170px_1fr] md:items-center">
+        <div className="mx-auto grid h-40 w-40 place-items-center rounded-full" style={{ background: `conic-gradient(${gradient || '#E2E8F0 0deg 360deg'})` }}>
+          <div className="grid h-24 w-24 place-items-center rounded-full bg-white text-center shadow-inner">
+            <b className="text-2xl text-[#0D3B66]">{total}</b>
+          </div>
+        </div>
+        <div className="space-y-4">
+          {items.map((item, index) => (
+            <div key={item.label} className="flex items-center justify-between gap-4 text-sm">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="h-3 w-3 rounded-full" style={{ backgroundColor: colors[index % colors.length] }} />
+                <span className="truncate text-slate-600">{item.label}</span>
+              </div>
+              <div className="text-right">
+                <b className="text-[#0D3B66]">{porcentagem(item.value, total)}%</b>
+                <p className="text-xs text-slate-400">{item.value}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CompactRanking({ title, subtitle, data, action = 'Ver todas' }) {
+  const max = Math.max(...data.map((item) => item.value), 1)
+  const lista = data.slice(0, 5)
+  return (
+    <div className="rounded-[2rem] border border-white/70 bg-white p-5 shadow-sm shadow-slate-200/70">
+      <h3 className="font-semibold text-[#0D3B66]">{title}</h3>
+      <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+      <div className="mt-5 space-y-4">
+        {lista.length ? lista.map((item, index) => (
+          <div key={item.label}>
+            <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+              <span className="min-w-0 truncate font-medium text-slate-600">{index + 1}. {item.label}</span>
+              <b className="text-[#0D3B66]">{item.value}</b>
+            </div>
+            <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+              <div className="h-full rounded-full bg-[#0F9AA8]" style={{ width: `${Math.max((item.value / max) * 100, 4)}%` }} />
+            </div>
+          </div>
+        )) : <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">Sem dados no período selecionado.</p>}
+      </div>
+      <button type="button" className="mt-5 w-full rounded-xl bg-[#0F9AA8]/10 px-4 py-3 text-sm font-semibold text-[#0F9AA8]">{action}</button>
+    </div>
+  )
+}
+
+function AlertPanel({ alerts }) {
+  return (
+    <div className="rounded-[2rem] border border-white/70 bg-white p-5 shadow-sm shadow-slate-200/70">
+      <h3 className="font-semibold text-[#0D3B66]">Alertas inteligentes</h3>
+      <p className="mt-1 text-sm text-slate-500">Ações importantes para sua gestão.</p>
+      <div className="mt-5 divide-y divide-slate-100">
+        {alerts.map((alert) => {
+          const Icon = alert.icon
+          return (
+            <div key={alert.label} className="flex items-center justify-between gap-4 py-3 text-sm">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ backgroundColor: `${alert.color}18`, color: alert.color }}>
+                  <Icon size={17} />
+                </span>
+                <span className="truncate text-slate-600">{alert.label}</span>
+              </div>
+              <div className="flex flex-shrink-0 items-center gap-4">
+                <b className="text-[#0D3B66]">{alert.value}</b>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function Dashboard({ setPage, pacientes, agendamentos, usuario }) {
   const hoje = hojeISO()
   const agHoje = agendamentos.filter((item) => item.data === hoje)
@@ -755,6 +1191,15 @@ function PatientCheckbox({ label, checked, onChange }) {
   )
 }
 
+function OpticaExternaToggle({ checked, onChange }) {
+  return (
+    <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+      Ótica externa
+    </label>
+  )
+}
+
 function NovoPaciente({ onSave, setPage, pacientes = [] }) {
   const [erro, setErro] = useState('')
   const [duplicados, setDuplicados] = useState(null)
@@ -766,7 +1211,8 @@ function NovoPaciente({ onSave, setPage, pacientes = [] }) {
     email: '',
     estado: 'SC',
     cidade: 'Criciúma',
-    unidade: 'Criciúma',
+    unidade: '',
+    optica_externa: false,
     observacoes: '',
     usa_oculos: false,
     diabetes: false,
@@ -776,6 +1222,10 @@ function NovoPaciente({ onSave, setPage, pacientes = [] }) {
 
   function update(key, value) {
     setForm((old) => ({ ...old, [key]: value }))
+  }
+
+  function toggleOpticaExterna(value) {
+    setForm((old) => ({ ...old, optica_externa: value, unidade: value ? old.unidade : '' }))
   }
 
   function encontrarDuplicados() {
@@ -825,20 +1275,17 @@ function NovoPaciente({ onSave, setPage, pacientes = [] }) {
           <Field label="Telefone"><TextInput value={form.telefone} onChange={(v) => update('telefone', formatPhone(v))} placeholder="(48) 99999-9999" /></Field>
           <Field label="E-mail"><TextInput type="email" value={form.email} onChange={(v) => update('email', v)} placeholder="email@exemplo.com" /></Field>
           <Field label="Estado">
-            <select value={form.estado} onChange={(e) => { update('estado', e.target.value); update('cidade', getCidades(e.target.value)[0]) }} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base">
+            <select value={form.estado} onChange={(e) => { update('estado', e.target.value); update('cidade', '') }} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base">
               {estadosBrasil.map((uf) => <option key={uf}>{uf}</option>)}
             </select>
           </Field>
-          <Field label="Cidade">
-            <select value={form.cidade} onChange={(e) => update('cidade', e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base">
-              {getCidades(form.estado).map((cidadeItem) => <option key={cidadeItem}>{cidadeItem}</option>)}
-            </select>
-          </Field>
-          <Field label="Unidade">
-            <select value={form.unidade} onChange={(e) => update('unidade', e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base">
-              {unidadesSC.map((u) => <option key={u}>{u}</option>)}
-            </select>
-          </Field>
+          <CidadeAtendimentoField value={form.cidade} estado={form.estado} onSelect={({ cidade, estado }) => { update('cidade', cidade); if (estado) update('estado', estado) }} />
+          <div className="flex items-end">
+            <OpticaExternaToggle checked={Boolean(form.optica_externa)} onChange={toggleOpticaExterna} />
+          </div>
+          {form.optica_externa ? (
+            <Field label="Nome da ótica externa"><TextInput value={form.unidade} onChange={(v) => update('unidade', v.slice(0, 80))} placeholder="Digite o nome da ótica" /></Field>
+          ) : null}
         </div>
         <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
           <PatientCheckbox label="Já é usuário de óculos" checked={Boolean(form.usa_oculos)} onChange={(value) => update('usa_oculos', value)} />
@@ -1105,7 +1552,8 @@ function Historico({ paciente, setPage, onUpdatePaciente, onDeletePaciente }) {
     email: paciente?.email || '',
     estado: paciente?.estado || 'SC',
     cidade: paciente?.cidade || 'Criciúma',
-    unidade: paciente?.unidade || paciente?.cidade || 'Criciúma',
+    unidade: isOpticaExternaValue(paciente?.unidade, paciente?.cidade) ? paciente?.unidade || '' : '',
+    optica_externa: isOpticaExternaValue(paciente?.unidade, paciente?.cidade),
     observacoes: paciente?.observacoes || '',
     usa_oculos: Boolean(paciente?.usa_oculos),
     diabetes: Boolean(paciente?.diabetes),
@@ -1126,7 +1574,8 @@ function Historico({ paciente, setPage, onUpdatePaciente, onDeletePaciente }) {
       email: paciente?.email || '',
       estado: paciente?.estado || 'SC',
       cidade: paciente?.cidade || 'Criciúma',
-      unidade: paciente?.unidade || paciente?.cidade || 'Criciúma',
+      unidade: isOpticaExternaValue(paciente?.unidade, paciente?.cidade) ? paciente?.unidade || '' : '',
+      optica_externa: isOpticaExternaValue(paciente?.unidade, paciente?.cidade),
       observacoes: paciente?.observacoes || '',
       usa_oculos: Boolean(paciente?.usa_oculos),
       diabetes: Boolean(paciente?.diabetes),
@@ -1140,6 +1589,10 @@ function Historico({ paciente, setPage, onUpdatePaciente, onDeletePaciente }) {
 
   function update(key, value) {
     setForm((old) => ({ ...old, [key]: value }))
+  }
+
+  function toggleOpticaExterna(value) {
+    setForm((old) => ({ ...old, optica_externa: value, unidade: value ? old.unidade : '' }))
   }
 
   async function salvarPaciente() {
@@ -1206,20 +1659,17 @@ function Historico({ paciente, setPage, onUpdatePaciente, onDeletePaciente }) {
           <Field label="Telefone"><TextInput value={form.telefone} onChange={(v) => update('telefone', formatPhone(v))} placeholder="(48) 99999-9999" /></Field>
           <Field label="E-mail"><TextInput type="email" value={form.email} onChange={(v) => update('email', v)} placeholder="email@exemplo.com" /></Field>
           <Field label="Estado">
-            <select value={form.estado} onChange={(e) => { update('estado', e.target.value); update('cidade', getCidades(e.target.value)[0]) }} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base">
+            <select value={form.estado} onChange={(e) => { update('estado', e.target.value); update('cidade', '') }} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base">
               {estadosBrasil.map((uf) => <option key={uf}>{uf}</option>)}
             </select>
           </Field>
-          <Field label="Cidade">
-            <select value={form.cidade} onChange={(e) => update('cidade', e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base">
-              {getCidades(form.estado).map((cidadeItem) => <option key={cidadeItem}>{cidadeItem}</option>)}
-            </select>
-          </Field>
-          <Field label="Unidade">
-            <select value={form.unidade} onChange={(e) => update('unidade', e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base">
-              {unidadesSC.map((u) => <option key={u}>{u}</option>)}
-            </select>
-          </Field>
+          <CidadeAtendimentoField value={form.cidade} estado={form.estado} onSelect={({ cidade, estado }) => { update('cidade', cidade); if (estado) update('estado', estado) }} />
+          <div className="flex items-end">
+            <OpticaExternaToggle checked={Boolean(form.optica_externa)} onChange={toggleOpticaExterna} />
+          </div>
+          {form.optica_externa ? (
+            <Field label="Nome da ótica externa"><TextInput value={form.unidade} onChange={(v) => update('unidade', v.slice(0, 80))} placeholder="Digite o nome da ótica" /></Field>
+          ) : null}
           <InfoMini label="Receitas" value={paciente.receitas.length} />
         </div>
         <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -1373,52 +1823,72 @@ function Relatorios({ pacientes, agendamentos }) {
   const [visao, setVisao] = useState('Mês')
   const [estado, setEstado] = useState('SC')
   const [cidade, setCidade] = useState('Todas')
+  const [graficoModo, setGraficoModo] = useState('hora')
   const receitas = getTodasReceitas(pacientes)
-  const totalReceitas = receitas.length
   const pacientesFiltrados = pacientes.filter((p) => p.estado === estado && (cidade === 'Todas' || p.cidade === cidade))
-  const receitasPorCidade = getCidades(estado).map((c) => ({ label: c, value: pacientes.filter((p) => p.cidade === c).reduce((s, p) => s + p.receitas.length, 0) }))
-  const agendaPorStatus = statusOptions.map((s) => ({ label: s, value: agendamentos.filter((a) => a.status === s).length }))
-  const base = hojeISO()
-  const periodo = (() => {
-    if (visao === 'Dia') {
-      return ['08', '10', '12', '14', '16', '18'].map((hora) => ({
-        label: `${hora}h`,
-        value: agendamentos.filter((item) => item.data === base && item.hora?.startsWith(hora)).length,
-      }))
+  const receitasBase = receitas.filter((receita) => receita.paciente?.estado === estado && (cidade === 'Todas' || receita.paciente?.cidade === cidade))
+  const receitasPeriodo = receitasBase.filter((receita) => receitaNoPeriodo(receita, visao))
+  const receitasPeriodoAnterior = receitasBase.filter((receita) => receitaNoPeriodo(receita, visao, -1))
+  const pacientesUnicos = new Set(receitasPeriodo.map((receita) => receita.paciente?.id).filter(Boolean))
+  const pacientesUnicosAnterior = new Set(receitasPeriodoAnterior.map((receita) => receita.paciente?.id).filter(Boolean))
+  const pacientesRetorno = Array.from(pacientesUnicos).filter((id) => (pacientes.find((p) => p.id === id)?.receitas || []).length > 1).length
+  const taxaRetorno = porcentagem(pacientesRetorno, pacientesUnicos.size)
+  const taxaRetornoAnterior = porcentagem(
+    Array.from(pacientesUnicosAnterior).filter((id) => (pacientes.find((p) => p.id === id)?.receitas || []).length > 1).length,
+    pacientesUnicosAnterior.size
+  )
+  const agendamentosPeriodo = agendamentos
+    .filter((item) => item.estado === estado && (cidade === 'Todas' || item.cidade === cidade || item.unidade === cidade))
+    .filter((item) => receitaNoPeriodo(item, visao))
+  const agendaOcupada = porcentagem(agendamentosPeriodo.filter((item) => ['Confirmado', 'Atendido'].includes(item.status)).length, agendamentosPeriodo.length)
+  const agendaOcupadaAnterior = porcentagem(
+    agendamentos
+      .filter((item) => item.estado === estado && (cidade === 'Todas' || item.cidade === cidade || item.unidade === cidade))
+      .filter((item) => receitaNoPeriodo(item, visao, -1))
+      .filter((item) => ['Confirmado', 'Atendido'].includes(item.status)).length,
+    agendamentos.filter((item) => item.estado === estado && (cidade === 'Todas' || item.cidade === cidade || item.unidade === cidade)).filter((item) => receitaNoPeriodo(item, visao, -1)).length
+  )
+  const receitasInternas = receitasPeriodo.filter((receita) => !pacienteExterno(receita.paciente)).length
+  const receitasExternas = receitasPeriodo.length - receitasInternas
+  const opticasParceiras = agruparContagem(receitasPeriodo.filter((receita) => pacienteExterno(receita.paciente)), (receita) => receita.paciente?.unidade)
+  const rankingOptometristas = agruparContagem(receitasPeriodo, (receita) => receita.responsavel)
+  const rankingCidades = agruparContagem(receitasBase, (receita) => receita.paciente?.cidade)
+  const agendaPorStatus = statusOptions.map((s) => ({ label: s, value: agendamentosPeriodo.filter((a) => a.status === s).length }))
+
+  const graficoAtendimentos = (() => {
+    if (graficoModo === 'tipo') {
+      return [
+        { label: 'Interno', value: receitasInternas },
+        { label: 'Externo', value: receitasExternas },
+      ]
     }
-    if (visao === 'Semana') {
+    if (graficoModo === 'semana') {
       const dias = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
       return dias.map((label, index) => ({
         label,
-        value: receitas.filter((item) => {
-          const data = dataParaDia(item.data)
-          return data && data.getDay() === index && mesmaSemana(item.data, base)
-        }).length,
+        value: receitasPeriodo.filter((receita) => dataParaDia(receita.data)?.getDay() === index).length,
       }))
     }
-    if (visao === 'Ano') {
-      const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-      const anoAtual = dataParaDia(base)?.getFullYear()
-      return meses.map((label, index) => ({
-        label,
-        value: receitas.filter((item) => {
-          const data = dataParaDia(item.data)
-          return data && data.getFullYear() === anoAtual && data.getMonth() === index
-        }).length,
-      }))
-    }
-    const mesAtual = dataParaDia(base)?.getMonth()
-    const anoAtual = dataParaDia(base)?.getFullYear()
-    return ['Semana 1', 'Semana 2', 'Semana 3', 'Semana 4', 'Semana 5'].map((label, index) => ({
-      label,
-      value: receitas.filter((item) => {
-        const data = dataParaDia(item.data)
-        if (!data || data.getMonth() !== mesAtual || data.getFullYear() !== anoAtual) return false
-        return Math.floor((data.getDate() - 1) / 7) === index
+    const horas = [8, 10, 12, 14, 16, 18, 20]
+    return horas.map((hora) => ({
+      label: `${String(hora).padStart(2, '0')}h`,
+      value: receitasPeriodo.filter((receita) => {
+        const createdAt = receita.created_at && String(receita.created_at).includes('T') ? new Date(receita.created_at) : new Date(`${receita.data}T12:00:00`)
+        const horaReceita = createdAt.getHours()
+        return horaReceita >= hora && horaReceita < hora + 2
       }).length,
     }))
   })()
-  const mapaEstados = ['SC', 'SP', 'PR', 'RS'].map((uf) => ({ label: uf, value: pacientes.filter((p) => p.estado === uf).length + agendamentos.filter((a) => a.estado === uf).length }))
+
+  const prontuariosIncompletos = pacientesFiltrados.filter((p) => !p.cpf || !p.telefone || !p.nascimento).length
+  const optometristasSemAtendimento = Object.keys(optometristasRegistros).filter((nome) => !rankingOptometristas.some((item) => item.label === nome)).length
+  const alertas = [
+    { label: 'Prontuários incompletos', value: `${prontuariosIncompletos} pacientes`, icon: FileText, color: '#7C3AED' },
+    { label: 'Óticas externas com baixo movimento', value: `${opticasParceiras.filter((item) => item.value <= 1).length} óticas`, icon: Home, color: '#F59E0B' },
+    { label: 'Optometristas sem atendimentos no período', value: `${optometristasSemAtendimento} profissionais`, icon: Users, color: '#0F9AA8' },
+    { label: 'Agendamentos cancelados no período', value: `${agendamentosPeriodo.filter((item) => item.status === 'Cancelado').length} horários`, icon: CalendarDays, color: '#EF4444' },
+  ]
+  const helperPeriodo = `vs período anterior`
 
   return (
     <DashboardShell>
@@ -1436,25 +1906,39 @@ function Relatorios({ pacientes, agendamentos }) {
       <section className="grid grid-cols-1 gap-4 rounded-[2rem] border border-white/70 bg-white p-4 shadow-sm shadow-slate-200/70 md:grid-cols-3">
         <Field label="Mês / visão"><select value={visao} onChange={(e) => setVisao(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base outline-none focus:border-[#0F9AA8]"><option>Dia</option><option>Semana</option><option>Mês</option><option>Ano</option></select></Field>
         <Field label="Estado"><select value={estado} onChange={(e) => { setEstado(e.target.value); setCidade('Todas') }} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base outline-none focus:border-[#0F9AA8]">{estadosBrasil.map((uf) => <option key={uf}>{uf}</option>)}</select></Field>
-        <Field label="Cidade"><select value={cidade} onChange={(e) => setCidade(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base outline-none focus:border-[#0F9AA8]"><option>Todas</option>{getCidades(estado).map((c) => <option key={c}>{c}</option>)}</select></Field>
+        <CidadeRelatorioField value={cidade} estado={estado} onChange={setCidade} />
       </section>
 
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
-        <Info title="Receitas" value={totalReceitas} icon={FileText} />
-        <Info title="Agendamentos" value={agendamentos.length} icon={CalendarDays} />
-        <Info title="Pacientes" value={pacientesFiltrados.length} icon={Users} />
-        <Info title="Estado" value={estado} icon={Home} />
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
+        <ReportMetricCard title="Atendimentos" value={receitasPeriodo.length} icon={Users} delta={deltaPercentual(receitasPeriodo.length, receitasPeriodoAnterior.length)} helper={helperPeriodo} />
+        <ReportMetricCard title="Pacientes únicos" value={pacientesUnicos.size} icon={Users} delta={deltaPercentual(pacientesUnicos.size, pacientesUnicosAnterior.size)} helper={helperPeriodo} />
+        <ReportMetricCard title="Receitas emitidas" value={receitasPeriodo.length} icon={FileText} delta={deltaPercentual(receitasPeriodo.length, receitasPeriodoAnterior.length)} helper={helperPeriodo} />
+        <ReportMetricCard title="Taxa de retorno" value={`${taxaRetorno}%`} icon={Activity} delta={taxaRetorno - taxaRetornoAnterior} helper={helperPeriodo} />
+        <ReportMetricCard title="Óticas externas" value={opticasParceiras.length} icon={Home} delta={deltaPercentual(receitasExternas, receitasPeriodoAnterior.filter((receita) => pacienteExterno(receita.paciente)).length)} helper={helperPeriodo} accent="#F59E0B" />
+        <ReportMetricCard title="Agenda ocupada" value={`${agendaOcupada}%`} icon={CalendarDays} delta={agendaOcupada - agendaOcupadaAnterior} helper={helperPeriodo} />
       </section>
 
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.4fr_1fr]">
-        <ModernBarChart title={`Atendimentos por ${visao.toLowerCase()}`} subtitle="Leitura consolidada do período selecionado." data={periodo} />
-        <DonutPanel title="Agenda confirmada" value={agendamentos.filter((a) => a.status === 'Confirmado').length} total={Math.max(agendamentos.length, 1)} items={agendaPorStatus} />
+        <SmoothLineChart title="Atendimentos por hora" subtitle="Análise do período selecionado." data={graficoAtendimentos} mode={graficoModo} setMode={setGraficoModo} />
+        <DonutBreakdown
+          title="Interno x Externo"
+          subtitle="Percentual de atendimentos."
+          items={[
+            { label: 'Interno (clínica/ótica própria)', value: receitasInternas },
+            { label: 'Externo (ótica parceira)', value: receitasExternas },
+          ]}
+        />
       </section>
 
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <RankingChart title="Receitas por cidade" data={receitasPorCidade} />
-        <RankingChart title="Mapa por estado" data={mapaEstados} />
-        <RankingChart title="Agenda por status" data={agendaPorStatus} />
+        <CompactRanking title="Ranking de óticas parceiras" subtitle="Por número de atendimentos." data={opticasParceiras} />
+        <DonutBreakdown title="Agenda por status" subtitle="Distribuição dos horários." items={agendaPorStatus} />
+        <CompactRanking title="Atendimentos por optometrista" subtitle="Top 5 por número de atendimentos." data={rankingOptometristas} />
+      </section>
+
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_1.2fr]">
+        <CompactRanking title="Mapa de atendimentos" subtitle="Distribuição geográfica dos pacientes." data={rankingCidades} action="Ver lista" />
+        <AlertPanel alerts={alertas} />
       </section>
     </DashboardShell>
   )
