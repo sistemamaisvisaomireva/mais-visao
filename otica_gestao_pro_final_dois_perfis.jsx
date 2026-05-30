@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './src/lib/supabase.js'
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import {
   Activity,
   CalendarDays,
@@ -37,7 +38,6 @@ const cidadesBrasilFallback = Object.entries(cidadesPorEstado).flatMap(([uf, cid
 let cidadesBrasilPromise = null
 const diagnosticosOptions = ['Miopia', 'Hipermetropia', 'Astigmatismo', 'Presbiopia']
 const lentesOptions = ['Multifocal', 'Bifocal', 'VS', 'Fotossensível', 'A.R.', 'Incolor']
-const statusOptions = ['Confirmado', 'Agendado', 'Cancelado', 'Atendido']
 const perfilAdministrador = 'Administrador'
 const perfilOptometrista = 'Optometrista'
 const perfilRecepcao = 'Recepcionista'
@@ -195,10 +195,6 @@ function getCidades(estado) {
   return cidadesPorEstado[estado] || cidadesPadrao
 }
 
-function isOpticaExternaValue(unidade, cidade) {
-  return Boolean(unidade && unidade !== cidade && !unidadesSC.includes(unidade))
-}
-
 function normalizarBusca(value) {
   return String(value || '')
     .normalize('NFD')
@@ -270,6 +266,7 @@ function mapPaciente(row, receitas = []) {
     estado: row.estado || 'SC',
     cidade: row.cidade || 'Criciúma',
     unidade: row.unidade || row.cidade || 'Criciúma',
+    optica_externa: Boolean(row.optica_externa),
     observacoes: row.observacoes || '',
     usa_oculos: Boolean(row.usa_oculos),
     diabetes: Boolean(row.diabetes),
@@ -288,6 +285,7 @@ function mapAgendamento(row) {
     estado: row.estado || 'SC',
     cidade: row.cidade || row.unidade || 'Criciúma',
     unidade: row.unidade || row.cidade || 'Criciúma',
+    optica_externa: Boolean(row.optica_externa),
     data: dataISO(row.data),
     hora: horaCurta(row.hora),
     status: row.status || 'Confirmado',
@@ -337,6 +335,29 @@ function receitaNoPeriodo(receita, visao, offset = 0, base = hojeISO()) {
   return data.getFullYear() === alvo.getFullYear() && data.getMonth() === alvo.getMonth()
 }
 
+function inicioPeriodo(visao, offset = 0, base = hojeISO()) {
+  const atual = dataParaDia(base)
+  if (!atual) return null
+
+  if (visao === 'Dia') {
+    const alvo = new Date(atual)
+    alvo.setDate(alvo.getDate() + offset)
+    return alvo
+  }
+
+  if (visao === 'Semana') {
+    const inicio = new Date(atual)
+    inicio.setDate(atual.getDate() - atual.getDay() + (offset * 7))
+    return inicio
+  }
+
+  if (visao === 'Ano') {
+    return new Date(atual.getFullYear() + offset, 0, 1)
+  }
+
+  return new Date(atual.getFullYear(), atual.getMonth() + offset, 1)
+}
+
 function agruparContagem(items, getLabel) {
   const mapa = items.reduce((acc, item) => {
     const label = getLabel(item) || 'Sem informação'
@@ -359,7 +380,7 @@ function deltaPercentual(atual, anterior) {
 }
 
 function pacienteExterno(paciente) {
-  return isOpticaExternaValue(paciente?.unidade, paciente?.cidade)
+  return Boolean(paciente?.optica_externa && String(paciente?.unidade || '').trim())
 }
 
 function slugArquivo(value) {
@@ -420,7 +441,7 @@ function TextInput({ value, onChange, placeholder, type = 'text', max, min, read
   )
 }
 
-function CidadeAtendimentoField({ value, estado, onSelect }) {
+function CidadeAtendimentoField({ value, estado, onSelect, label = 'Local de Atendimento' }) {
   const selectedLabel = value ? `${value}${estado ? ` - ${estado}` : ''}` : ''
   const [query, setQuery] = useState(selectedLabel)
   const [cidades, setCidades] = useState(cidadesBrasilFallback)
@@ -467,7 +488,7 @@ function CidadeAtendimentoField({ value, estado, onSelect }) {
 
   return (
     <div className="relative">
-      <span className="mb-1.5 block text-sm text-slate-500">Local de Atendimento</span>
+      {label ? <span className="mb-1.5 block text-sm text-slate-500">{label}</span> : null}
       <input
         value={query}
         onFocus={() => setOpen(true)}
@@ -499,14 +520,14 @@ function CidadeAtendimentoField({ value, estado, onSelect }) {
   )
 }
 
-function CidadeRelatorioField({ value, estado, onChange }) {
-  const [query, setQuery] = useState(value === 'Todas' ? 'Todas' : value || '')
+function CidadeRelatorioField({ value, estado, onChange, label = 'Cidade', inputClassName = 'min-w-0 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base outline-none focus:border-[#0F9AA8]' }) {
+  const [query, setQuery] = useState(value === 'Todas' ? '' : value || '')
   const [cidades, setCidades] = useState(cidadesBrasilFallback)
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
-    setQuery(value === 'Todas' ? 'Todas' : value || '')
+    setQuery(value === 'Todas' ? '' : value || '')
   }, [value])
 
   useEffect(() => {
@@ -523,19 +544,13 @@ function CidadeRelatorioField({ value, estado, onChange }) {
   }, [])
 
   const resultados = useMemo(() => {
-    const termo = normalizarBusca(query === 'Todas' ? '' : query)
+    const termo = normalizarBusca(query)
     const cidadesDoEstado = cidades.filter((cidade) => cidade.uf === estado)
     const filtradas = termo
       ? cidadesDoEstado.filter((cidade) => normalizarBusca(cidade.nome).includes(termo))
       : cidadesDoEstado
     return filtradas.slice(0, 40)
   }, [cidades, estado, query])
-
-  function selecionarTodas() {
-    setQuery('Todas')
-    setOpen(false)
-    onChange('Todas')
-  }
 
   function selecionarCidade(cidade) {
     setQuery(cidade.nome)
@@ -551,27 +566,17 @@ function CidadeRelatorioField({ value, estado, onChange }) {
 
   return (
     <div className="relative">
-      <span className="mb-1.5 block text-sm text-slate-500">Cidade</span>
+      {label ? <span className="mb-1.5 block text-sm text-slate-500">{label}</span> : null}
       <input
         value={query}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 120)}
         onChange={(event) => mudarBusca(event.target.value)}
-        placeholder="Todas"
-        className="min-w-0 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base outline-none focus:border-[#0F9AA8]"
+        placeholder="Pesquisar cidade"
+        className={inputClassName}
       />
       {open ? (
         <div className="absolute left-0 right-0 top-full z-30 mt-2 max-h-72 overflow-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-200/80">
-          <button
-            type="button"
-            onMouseDown={(event) => {
-              event.preventDefault()
-              selecionarTodas()
-            }}
-            className="block w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-[#0D3B66] transition hover:bg-[#0F9AA8]/10"
-          >
-            Todas
-          </button>
           {loading ? <p className="px-3 py-2 text-sm text-slate-500">Carregando cidades...</p> : null}
           {!loading && resultados.length === 0 ? <p className="px-3 py-2 text-sm text-slate-500">Nenhuma cidade encontrada.</p> : null}
           {resultados.map((cidade) => (
@@ -652,12 +657,14 @@ function Login({ onLogin, initialError = '' }) {
   return (
     <div className="flex min-h-screen w-full items-center justify-center overflow-hidden bg-[#F5F7FA] p-5">
       <form onSubmit={entrar} className="mx-auto min-w-0 w-[calc(100vw-2.5rem)] max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
-        <div className="mb-8 flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#0F9AA8] font-semibold text-white">O+</div>
-          <div>
-            <h1 className="text-xl font-semibold text-[#0D3B66]">Opto+ Gestão Pro</h1>
-            <p className="text-sm text-slate-500">Sistema interno Opto+</p>
-          </div>
+        <div className="mb-8 flex flex-col items-center text-center">
+          <img
+            src="/logo-optica-plus.jpg"
+            alt="Opto+ Clínica de Optometria"
+            className="h-auto w-56 max-w-full object-contain"
+          />
+          <h1 className="mt-4 text-xl font-semibold text-[#0D3B66]">Opto+ Gestão Pro</h1>
+          <p className="mt-1 text-sm text-slate-500">Sistema interno Opto+</p>
         </div>
         <div className="space-y-4">
           <Field label="Usuário">
@@ -1029,7 +1036,7 @@ function DonutBreakdown({ title, subtitle, items }) {
   )
 }
 
-function CompactRanking({ title, subtitle, data, action = 'Ver todas' }) {
+function CompactRanking({ title, subtitle, data }) {
   const max = Math.max(...data.map((item) => item.value), 1)
   const lista = data.slice(0, 5)
   return (
@@ -1049,7 +1056,6 @@ function CompactRanking({ title, subtitle, data, action = 'Ver todas' }) {
           </div>
         )) : <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">Sem dados no período selecionado.</p>}
       </div>
-      <button type="button" className="mt-5 w-full rounded-xl bg-[#0F9AA8]/10 px-4 py-3 text-sm font-semibold text-[#0F9AA8]">{action}</button>
     </div>
   )
 }
@@ -1121,16 +1127,18 @@ function Dashboard({ setPage, pacientes, agendamentos, usuario }) {
 }
 
 function EstadoCidadeFiltro({ estado, setEstado, cidade, setCidade }) {
-  const cidades = getCidades(estado)
   return (
     <div className="grid grid-cols-2 gap-3">
       <select value={estado} onChange={(e) => { setEstado(e.target.value); setCidade('Todas') }} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base">
         {estadosBrasil.map((uf) => <option key={uf}>{uf}</option>)}
       </select>
-      <select value={cidade} onChange={(e) => setCidade(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base">
-        <option>Todas</option>
-        {cidades.map((cidadeItem) => <option key={cidadeItem}>{cidadeItem}</option>)}
-      </select>
+      <CidadeRelatorioField
+        value={cidade}
+        estado={estado}
+        onChange={setCidade}
+        label=""
+        inputClassName="min-w-0 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base outline-none focus:border-[#0F9AA8]"
+      />
     </div>
   )
 }
@@ -1246,6 +1254,7 @@ function NovoPaciente({ onSave, setPage, pacientes = [] }) {
 
   async function salvar(confirmarDuplicado = false) {
     if (form.nome.trim().length < 3) return setErro('Nome precisa ter pelo menos 3 letras.')
+    if (form.optica_externa && !form.unidade.trim()) return setErro('Informe o nome da ótica externa.')
     if (!confirmarDuplicado) {
       const encontrados = encontrarDuplicados()
       if (encontrados.length) {
@@ -1552,8 +1561,8 @@ function Historico({ paciente, setPage, onUpdatePaciente, onDeletePaciente }) {
     email: paciente?.email || '',
     estado: paciente?.estado || 'SC',
     cidade: paciente?.cidade || 'Criciúma',
-    unidade: isOpticaExternaValue(paciente?.unidade, paciente?.cidade) ? paciente?.unidade || '' : '',
-    optica_externa: isOpticaExternaValue(paciente?.unidade, paciente?.cidade),
+    unidade: paciente?.optica_externa ? paciente?.unidade || '' : '',
+    optica_externa: Boolean(paciente?.optica_externa),
     observacoes: paciente?.observacoes || '',
     usa_oculos: Boolean(paciente?.usa_oculos),
     diabetes: Boolean(paciente?.diabetes),
@@ -1574,8 +1583,8 @@ function Historico({ paciente, setPage, onUpdatePaciente, onDeletePaciente }) {
       email: paciente?.email || '',
       estado: paciente?.estado || 'SC',
       cidade: paciente?.cidade || 'Criciúma',
-      unidade: isOpticaExternaValue(paciente?.unidade, paciente?.cidade) ? paciente?.unidade || '' : '',
-      optica_externa: isOpticaExternaValue(paciente?.unidade, paciente?.cidade),
+      unidade: paciente?.optica_externa ? paciente?.unidade || '' : '',
+      optica_externa: Boolean(paciente?.optica_externa),
       observacoes: paciente?.observacoes || '',
       usa_oculos: Boolean(paciente?.usa_oculos),
       diabetes: Boolean(paciente?.diabetes),
@@ -1598,6 +1607,10 @@ function Historico({ paciente, setPage, onUpdatePaciente, onDeletePaciente }) {
   async function salvarPaciente() {
     if (form.nome.trim().length < 3) {
       setErro('Nome precisa ter pelo menos 3 letras.')
+      return
+    }
+    if (form.optica_externa && !form.unidade.trim()) {
+      setErro('Informe o nome da ótica externa.')
       return
     }
     try {
@@ -1740,7 +1753,6 @@ function AgendaList({ items }) {
             <p className="text-sm text-slate-500">{dataBR(a.data)} às {a.hora} • {a.unidade} • {a.telefone}</p>
             <p className="mt-1 text-xs text-slate-400">{a.obs}</p>
           </div>
-          <span className="w-fit rounded-full bg-[#0F9AA8]/10 px-3 py-1 text-xs font-medium text-[#0F9AA8]">{a.status}</span>
         </div>
       ))}
     </div>
@@ -1749,20 +1761,25 @@ function AgendaList({ items }) {
 
 function Agenda({ agendamentos, setPage }) {
   const [visao, setVisao] = useState('Dia')
-  const [status, setStatus] = useState('Todos')
   const [estado, setEstado] = useState('SC')
   const [cidade, setCidade] = useState('Todas')
   const lista = filtraPorVisao(agendamentos, visao)
-    .filter((a) => (status === 'Todos' || a.status === status) && (cidade === 'Todas' || a.unidade === cidade))
+    .filter((a) => a.estado === estado)
+    .filter((a) => cidade === 'Todas' || a.cidade === cidade || a.unidade === cidade)
 
   return (
     <>
       <PageTitle title="Agenda" subtitle="Agendamentos registrados." actions={<Button icon={Plus} onClick={() => setPage('novoAgendamento')}>Novo agendamento</Button>} />
-      <div className="mb-5 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-4 md:p-5">
+      <div className="mb-5 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-3 md:p-5">
         <Field label="Visão"><select value={visao} onChange={(e) => setVisao(e.target.value)} className="w-full rounded-xl border border-slate-200 px-4 py-3 text-base"><option>Dia</option><option>Semana</option><option value="Mes">Mês</option></select></Field>
         <Field label="Estado"><select value={estado} onChange={(e) => { setEstado(e.target.value); setCidade('Todas') }} className="w-full rounded-xl border border-slate-200 px-4 py-3 text-base">{estadosBrasil.map((u) => <option key={u}>{u}</option>)}</select></Field>
-        <Field label="Cidade"><select value={cidade} onChange={(e) => setCidade(e.target.value)} className="w-full rounded-xl border border-slate-200 px-4 py-3 text-base"><option>Todas</option>{getCidades(estado).map((u) => <option key={u}>{u}</option>)}</select></Field>
-        <Field label="Status"><select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full rounded-xl border border-slate-200 px-4 py-3 text-base"><option>Todos</option>{statusOptions.map((s) => <option key={s}>{s}</option>)}</select></Field>
+        <CidadeRelatorioField
+          value={cidade}
+          estado={estado}
+          onChange={setCidade}
+          label="Cidade"
+          inputClassName="min-w-0 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base outline-none focus:border-[#0F9AA8]"
+        />
       </div>
       {lista.length ? <AgendaList items={lista} /> : <Empty icon={CalendarDays} title="Nenhum agendamento" action={<Button onClick={() => setPage('novoAgendamento')}>Novo agendamento</Button>} />}
     </>
@@ -1771,19 +1788,26 @@ function Agenda({ agendamentos, setPage }) {
 
 function NovoAgendamento({ onSave, setPage, agendamentos }) {
   const [erro, setErro] = useState('')
-  const [form, setForm] = useState({ nome: '', telefone: '', estado: 'SC', cidade: 'Criciúma', unidade: 'Criciúma', data: hojeISO(), hora: '09:00', status: 'Confirmado', obs: '' })
+  const [form, setForm] = useState({ nome: '', telefone: '', estado: 'SC', cidade: '', unidade: '', optica_externa: false, data: hojeISO(), hora: '09:00', status: 'Confirmado', obs: '' })
 
   function update(k, v) {
     setForm((old) => ({ ...old, [k]: v }))
   }
 
+  function toggleOpticaExterna(value) {
+    setForm((old) => ({ ...old, optica_externa: value, unidade: value ? old.unidade : old.cidade }))
+  }
+
   async function salvar() {
     if (form.nome.trim().length < 3) return setErro('Informe o nome.')
     if (onlyDigits(form.telefone).length < 10) return setErro('Telefone inválido.')
-    const conflito = agendamentos.some((item) => item.data === form.data && item.hora === form.hora && item.unidade === form.unidade && item.status !== 'Cancelado')
+    if (!form.cidade) return setErro('Selecione uma cidade válida.')
+    if (form.optica_externa && !form.unidade.trim()) return setErro('Informe o nome da ótica externa.')
+    const unidadeAgenda = form.optica_externa ? form.unidade.trim() : form.cidade
+    const conflito = agendamentos.some((item) => item.data === form.data && item.hora === form.hora && item.unidade === unidadeAgenda && item.status !== 'Cancelado')
     if (conflito) return setErro('Já existe um agendamento nesse horário e unidade.')
     try {
-      await onSave(form)
+      await onSave({ ...form, unidade: unidadeAgenda })
       setErro('')
       setPage('agenda')
     } catch (error) {
@@ -1798,11 +1822,16 @@ function NovoAgendamento({ onSave, setPage, agendamentos }) {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <Field label="Nome"><TextInput value={form.nome} onChange={(v) => update('nome', onlyName(v))} /></Field>
           <Field label="Telefone"><TextInput value={form.telefone} onChange={(v) => update('telefone', formatPhone(v))} placeholder="(48) 99999-9999" /></Field>
-          <Field label="Estado"><select value={form.estado} onChange={(e) => { update('estado', e.target.value); update('cidade', getCidades(e.target.value)[0]); update('unidade', getCidades(e.target.value)[0]) }} className="w-full rounded-xl border border-slate-200 px-4 py-3 text-base">{estadosBrasil.map((uf) => <option key={uf}>{uf}</option>)}</select></Field>
-          <Field label="Cidade"><select value={form.cidade} onChange={(e) => { update('cidade', e.target.value); update('unidade', e.target.value) }} className="w-full rounded-xl border border-slate-200 px-4 py-3 text-base">{getCidades(form.estado).map((u) => <option key={u}>{u}</option>)}</select></Field>
+          <Field label="Estado"><select value={form.estado} onChange={(e) => { update('estado', e.target.value); update('cidade', ''); update('unidade', '') }} className="w-full rounded-xl border border-slate-200 px-4 py-3 text-base">{estadosBrasil.map((uf) => <option key={uf}>{uf}</option>)}</select></Field>
+          <CidadeAtendimentoField value={form.cidade} estado={form.estado} onSelect={({ cidade, estado }) => setForm((old) => ({ ...old, cidade, estado: estado || old.estado, unidade: old.optica_externa ? old.unidade : cidade }))} />
           <Field label="Data"><TextInput type="date" min={hojeISO()} value={form.data} onChange={(v) => update('data', v)} /></Field>
           <Field label="Hora"><TextInput type="time" value={form.hora} onChange={(v) => update('hora', v)} /></Field>
-          <Field label="Status"><select value={form.status} onChange={(e) => update('status', e.target.value)} className="w-full rounded-xl border border-slate-200 px-4 py-3 text-base">{statusOptions.filter((s) => s !== 'Atendido').map((s) => <option key={s}>{s}</option>)}</select></Field>
+          <div className="flex items-end">
+            <OpticaExternaToggle checked={Boolean(form.optica_externa)} onChange={toggleOpticaExterna} />
+          </div>
+          {form.optica_externa ? (
+            <Field label="Nome da ótica externa"><TextInput value={form.unidade} onChange={(v) => update('unidade', v.slice(0, 80))} placeholder="Digite o nome da ótica" /></Field>
+          ) : null}
         </div>
         <Field label="Observações"><textarea value={form.obs} onChange={(e) => update('obs', e.target.value.slice(0, 300))} rows={4} className="w-full rounded-xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-[#0F9AA8]" /></Field>
         {erro ? <p className="mt-4 text-sm text-red-500">{erro}</p> : null}
@@ -1829,31 +1858,36 @@ function Relatorios({ pacientes, agendamentos }) {
   const receitasBase = receitas.filter((receita) => receita.paciente?.estado === estado && (cidade === 'Todas' || receita.paciente?.cidade === cidade))
   const receitasPeriodo = receitasBase.filter((receita) => receitaNoPeriodo(receita, visao))
   const receitasPeriodoAnterior = receitasBase.filter((receita) => receitaNoPeriodo(receita, visao, -1))
+  const inicioPeriodoAtual = inicioPeriodo(visao)
+  const inicioPeriodoAnterior = inicioPeriodo(visao, -1)
   const pacientesUnicos = new Set(receitasPeriodo.map((receita) => receita.paciente?.id).filter(Boolean))
   const pacientesUnicosAnterior = new Set(receitasPeriodoAnterior.map((receita) => receita.paciente?.id).filter(Boolean))
-  const pacientesRetorno = Array.from(pacientesUnicos).filter((id) => (pacientes.find((p) => p.id === id)?.receitas || []).length > 1).length
-  const taxaRetorno = porcentagem(pacientesRetorno, pacientesUnicos.size)
-  const taxaRetornoAnterior = porcentagem(
-    Array.from(pacientesUnicosAnterior).filter((id) => (pacientes.find((p) => p.id === id)?.receitas || []).length > 1).length,
-    pacientesUnicosAnterior.size
-  )
+  const pacientesRetorno = Array.from(pacientesUnicos).filter((id) => {
+    const paciente = pacientes.find((p) => p.id === id)
+    return (paciente?.receitas || []).some((receita) => {
+      const data = dataParaDia(receita.data)
+      return Boolean(data && inicioPeriodoAtual && data < inicioPeriodoAtual)
+    })
+  }).length
+  const pacientesRetornoAnterior = Array.from(pacientesUnicosAnterior).filter((id) => {
+    const paciente = pacientes.find((p) => p.id === id)
+    return (paciente?.receitas || []).some((receita) => {
+      const data = dataParaDia(receita.data)
+      return Boolean(data && inicioPeriodoAnterior && data < inicioPeriodoAnterior)
+    })
+  }).length
   const agendamentosPeriodo = agendamentos
     .filter((item) => item.estado === estado && (cidade === 'Todas' || item.cidade === cidade || item.unidade === cidade))
     .filter((item) => receitaNoPeriodo(item, visao))
-  const agendaOcupada = porcentagem(agendamentosPeriodo.filter((item) => ['Confirmado', 'Atendido'].includes(item.status)).length, agendamentosPeriodo.length)
-  const agendaOcupadaAnterior = porcentagem(
-    agendamentos
-      .filter((item) => item.estado === estado && (cidade === 'Todas' || item.cidade === cidade || item.unidade === cidade))
-      .filter((item) => receitaNoPeriodo(item, visao, -1))
-      .filter((item) => ['Confirmado', 'Atendido'].includes(item.status)).length,
-    agendamentos.filter((item) => item.estado === estado && (cidade === 'Todas' || item.cidade === cidade || item.unidade === cidade)).filter((item) => receitaNoPeriodo(item, visao, -1)).length
-  )
+  const agendamentosPeriodoAnterior = agendamentos
+    .filter((item) => item.estado === estado && (cidade === 'Todas' || item.cidade === cidade || item.unidade === cidade))
+    .filter((item) => receitaNoPeriodo(item, visao, -1))
   const receitasInternas = receitasPeriodo.filter((receita) => !pacienteExterno(receita.paciente)).length
   const receitasExternas = receitasPeriodo.length - receitasInternas
   const opticasParceiras = agruparContagem(receitasPeriodo.filter((receita) => pacienteExterno(receita.paciente)), (receita) => receita.paciente?.unidade)
   const rankingOptometristas = agruparContagem(receitasPeriodo, (receita) => receita.responsavel)
-  const rankingCidades = agruparContagem(receitasBase, (receita) => receita.paciente?.cidade)
-  const agendaPorStatus = statusOptions.map((s) => ({ label: s, value: agendamentosPeriodo.filter((a) => a.status === s).length }))
+  const rankingCidades = agruparContagem(receitasPeriodo, (receita) => receita.paciente?.cidade)
+  const rankingAgendamentosCidade = agruparContagem(agendamentosPeriodo, (item) => item.cidade || item.unidade)
 
   const graficoAtendimentos = (() => {
     if (graficoModo === 'tipo') {
@@ -1886,7 +1920,7 @@ function Relatorios({ pacientes, agendamentos }) {
     { label: 'Prontuários incompletos', value: `${prontuariosIncompletos} pacientes`, icon: FileText, color: '#7C3AED' },
     { label: 'Óticas externas com baixo movimento', value: `${opticasParceiras.filter((item) => item.value <= 1).length} óticas`, icon: Home, color: '#F59E0B' },
     { label: 'Optometristas sem atendimentos no período', value: `${optometristasSemAtendimento} profissionais`, icon: Users, color: '#0F9AA8' },
-    { label: 'Agendamentos cancelados no período', value: `${agendamentosPeriodo.filter((item) => item.status === 'Cancelado').length} horários`, icon: CalendarDays, color: '#EF4444' },
+    { label: 'Agendamentos no período', value: `${agendamentosPeriodo.length} horários`, icon: CalendarDays, color: '#0F9AA8' },
   ]
   const helperPeriodo = `vs período anterior`
 
@@ -1908,20 +1942,29 @@ function Relatorios({ pacientes, agendamentos }) {
         <CidadeRelatorioField value={cidade} estado={estado} onChange={setCidade} />
       </section>
 
+      <section className="rounded-[2rem] border border-cyan-100 bg-white p-5 shadow-sm shadow-slate-200/70">
+        <h3 className="font-semibold text-[#0D3B66]">Como ler estes números</h3>
+        <p className="mt-2 text-sm leading-6 text-slate-500">
+          Atendimento é cada exame criado no período. Pacientes únicos conta cada pessoa uma vez, mesmo que ela tenha feito mais de um exame.
+          Atendimento externo só entra na conta quando o paciente foi marcado como ótica externa e recebeu o nome da ótica parceira.
+          O ranking abaixo mostra de quais óticas vieram esses atendimentos.
+        </p>
+      </section>
+
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
         <ReportMetricCard title="Atendimentos" value={receitasPeriodo.length} icon={Users} delta={deltaPercentual(receitasPeriodo.length, receitasPeriodoAnterior.length)} helper={helperPeriodo} />
         <ReportMetricCard title="Pacientes únicos" value={pacientesUnicos.size} icon={Users} delta={deltaPercentual(pacientesUnicos.size, pacientesUnicosAnterior.size)} helper={helperPeriodo} />
-        <ReportMetricCard title="Receitas emitidas" value={receitasPeriodo.length} icon={FileText} delta={deltaPercentual(receitasPeriodo.length, receitasPeriodoAnterior.length)} helper={helperPeriodo} />
-        <ReportMetricCard title="Taxa de retorno" value={`${taxaRetorno}%`} icon={Activity} delta={taxaRetorno - taxaRetornoAnterior} helper={helperPeriodo} />
-        <ReportMetricCard title="Óticas externas" value={opticasParceiras.length} icon={Home} delta={deltaPercentual(receitasExternas, receitasPeriodoAnterior.filter((receita) => pacienteExterno(receita.paciente)).length)} helper={helperPeriodo} accent="#F59E0B" />
-        <ReportMetricCard title="Agenda ocupada" value={`${agendaOcupada}%`} icon={CalendarDays} delta={agendaOcupada - agendaOcupadaAnterior} helper={helperPeriodo} />
+        <ReportMetricCard title="Retornos" value={pacientesRetorno} icon={Activity} delta={deltaPercentual(pacientesRetorno, pacientesRetornoAnterior)} helper={helperPeriodo} />
+        <ReportMetricCard title="Atendimentos externos" value={receitasExternas} icon={Home} delta={deltaPercentual(receitasExternas, receitasPeriodoAnterior.filter((receita) => pacienteExterno(receita.paciente)).length)} helper={helperPeriodo} accent="#F59E0B" />
+        <ReportMetricCard title="Agendamentos" value={agendamentosPeriodo.length} icon={CalendarDays} delta={deltaPercentual(agendamentosPeriodo.length, agendamentosPeriodoAnterior.length)} helper={helperPeriodo} />
+        <ReportMetricCard title="Cidades atendidas" value={rankingCidades.length} icon={Home} delta={0} helper="com exames no período" />
       </section>
 
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.4fr_1fr]">
         <SmoothLineChart title="Atendimentos por hora" subtitle="Análise do período selecionado." data={graficoAtendimentos} mode={graficoModo} setMode={setGraficoModo} />
         <DonutBreakdown
           title="Interno x Externo"
-          subtitle="Percentual de atendimentos."
+          subtitle="Atendimentos do período por origem do paciente."
           items={[
             { label: 'Interno (clínica/ótica própria)', value: receitasInternas },
             { label: 'Externo (ótica parceira)', value: receitasExternas },
@@ -1930,13 +1973,13 @@ function Relatorios({ pacientes, agendamentos }) {
       </section>
 
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <CompactRanking title="Ranking de óticas parceiras" subtitle="Por número de atendimentos." data={opticasParceiras} />
-        <DonutBreakdown title="Agenda por status" subtitle="Distribuição dos horários." items={agendaPorStatus} />
+        <CompactRanking title="Óticas parceiras" subtitle={`${opticasParceiras.length} ótica(s) externa(s) diferente(s), ordenadas por atendimentos.`} data={opticasParceiras} />
+        <CompactRanking title="Agendamentos por cidade" subtitle="Horários registrados no período." data={rankingAgendamentosCidade} />
         <CompactRanking title="Atendimentos por optometrista" subtitle="Top 5 por número de atendimentos." data={rankingOptometristas} />
       </section>
 
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_1.2fr]">
-        <CompactRanking title="Mapa de atendimentos" subtitle="Distribuição geográfica dos pacientes." data={rankingCidades} action="Ver lista" />
+        <CompactRanking title="Cidades atendidas" subtitle="Cidades dos pacientes que fizeram exame no período." data={rankingCidades} />
         <AlertPanel alerts={alertas} />
       </section>
     </DashboardShell>
@@ -2077,273 +2120,238 @@ function Backup() {
   )
 }
 
-function GrauCell({ value }) {
-  return <td>{value || ''}</td>
+function safePdfText(value) {
+  return String(value || '')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/[^\x20-\x7EÀ-ÿ]/g, '')
+    .trim()
 }
 
-function ReceitaPdfTabela({ titulo, dados }) {
-  return (
-    <table className="pdf-table">
-      <thead>
-        <tr>
-          <th>{titulo}</th>
-          <th>Esférico</th>
-          <th>Cilíndrico</th>
-          <th>Eixo</th>
-          <th>DNP</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <th>Olho<br />Direito</th>
-          <GrauCell value={dados?.od?.esf} />
-          <GrauCell value={dados?.od?.cil} />
-          <GrauCell value={dados?.od?.eixo} />
-          <GrauCell value={dados?.od?.dnp} />
-        </tr>
-        <tr>
-          <th>Olho<br />Esquerdo</th>
-          <GrauCell value={dados?.oe?.esf} />
-          <GrauCell value={dados?.oe?.cil} />
-          <GrauCell value={dados?.oe?.eixo} />
-          <GrauCell value={dados?.oe?.dnp} />
-        </tr>
-      </tbody>
-    </table>
-  )
+function drawPdfText(page, text, x, y, size, font, rgb, color = rgb(0.18, 0.18, 0.22)) {
+  const value = safePdfText(text)
+  if (!value) return
+  page.drawText(value, { x, y, size, font, color })
 }
 
-function CurvaOptica({ label }) {
-  const marks = Array.from({ length: 19 }, (_, index) => index * 10)
-  const rays = Array.from({ length: 19 }, (_, index) => index)
-  const baseX = 120
-  const baseY = 104
-  const radius = 90
-  return (
-    <div className="pdf-curve">
-      <svg viewBox="0 0 240 126" aria-hidden="true">
-        <path d={`M${baseX - radius} ${baseY} A${radius} ${radius} 0 0 1 ${baseX + radius} ${baseY}`} />
-        <path d={`M${baseX - 72} ${baseY} A72 72 0 0 1 ${baseX + 72} ${baseY}`} />
-        <path d={`M${baseX - 54} ${baseY} A54 54 0 0 1 ${baseX + 54} ${baseY}`} />
-        {rays.map((item) => {
-          const angle = 180 - item * 10
-          const x = baseX + Math.cos((angle * Math.PI) / 180) * radius
-          const y = baseY - Math.sin((angle * Math.PI) / 180) * radius
-          return <line key={item} x1={baseX} y1={baseY} x2={x} y2={y} />
-        })}
-        {marks.map((mark) => {
-          const angle = 180 - mark
-          const x = baseX + Math.cos((angle * Math.PI) / 180) * 108
-          const y = baseY - Math.sin((angle * Math.PI) / 180) * 108
-          return <text key={mark} x={x} y={y} textAnchor="middle">{mark}</text>
-        })}
-      </svg>
-      <span>{label}</span>
-    </div>
-  )
+function drawPdfCentered(page, text, x, y, width, size, font, rgb, color = rgb(0.18, 0.18, 0.22)) {
+  const value = safePdfText(text)
+  if (!value) return
+  const textWidth = font.widthOfTextAtSize(value, size)
+  drawPdfText(page, value, x + (width - textWidth) / 2, y, size, font, rgb, color)
 }
 
-function PdfInfoItem({ label, value }) {
-  return (
-    <div>
-      <span>{label}</span>
-      <strong>{value || '-'}</strong>
-    </div>
-  )
+function drawPdfFit(page, text, x, y, width, size, font, rgb) {
+  let value = safePdfText(text)
+  while (value && font.widthOfTextAtSize(value, size) > width) {
+    value = value.slice(0, -1)
+  }
+  drawPdfText(page, value, x, y, size, font, rgb)
 }
 
-function PdfCheckbox({ label, checked }) {
-  return (
-    <span className={`pdf-check ${checked ? 'is-checked' : ''}`}>
-      <span />
-      <span className="pdf-check-label">{label}</span>
-    </span>
-  )
+function drawPdfCheck(page, checked, x, y, rgb) {
+  if (!checked) return
+  const color = rgb(0.18, 0.18, 0.22)
+  page.drawLine({ start: { x: x + 2, y: y + 2 }, end: { x: x + 8, y: y + 8 }, thickness: 1.2, color })
+  page.drawLine({ start: { x: x + 8, y: y + 2 }, end: { x: x + 2, y: y + 8 }, thickness: 1.2, color })
 }
 
-function CarimboOptometrista({ responsavel }) {
-  const registro = optometristasRegistros[responsavel] || {
-    nome: responsavel || '',
+function drawPdfTableValues(page, dados, topY, font, rgb) {
+  const columns = [
+    { x: 145, width: 100 },
+    { x: 245, width: 100 },
+    { x: 345, width: 100 },
+    { x: 445, width: 95 },
+  ]
+  const rows = [
+    { y: topY - 52, values: [dados?.od?.esf, dados?.od?.cil, dados?.od?.eixo, dados?.od?.dnp] },
+    { y: topY - 94, values: [dados?.oe?.esf, dados?.oe?.cil, dados?.oe?.eixo, dados?.oe?.dnp] },
+  ]
+
+  rows.forEach((row) => {
+    row.values.forEach((value, index) => {
+      drawPdfCentered(page, value, columns[index].x, row.y, columns[index].width, 13, font, rgb)
+    })
+  })
+}
+
+function drawPdfWrappedObs(page, text, x, y, width, font, rgb) {
+  const words = safePdfText(text).split(/\s+/).filter(Boolean)
+  const lines = []
+  let current = ''
+  words.forEach((word) => {
+    const next = current ? `${current} ${word}` : word
+    if (font.widthOfTextAtSize(next, 10) <= width) {
+      current = next
+    } else {
+      if (current) lines.push(current)
+      current = word
+    }
+  })
+  if (current) lines.push(current)
+  lines.slice(0, 2).forEach((line, index) => {
+    drawPdfText(page, line, x, y - index * 30, 10, font, rgb)
+  })
+}
+
+function getCarimboPdf(usuario, receita) {
+  const nome = usuario?.nome || receita?.responsavel || ''
+  return optometristasRegistros[nome] || optometristasRegistros[receita?.responsavel] || {
+    nome,
     cargo: 'Optometrista',
     registro: '',
   }
-
-  return (
-    <div className="pdf-stamp">
-      <strong>{registro.nome}</strong>
-      <span>{registro.cargo}</span>
-      {registro.registro ? <b>{registro.registro}</b> : null}
-    </div>
-  )
 }
 
-function ReceitaPdfLayout({ paciente, receita }) {
+function drawCarimboPdf(page, registro, font, rgb) {
+  if (!registro?.nome) return
+  const x = 360
+  const y = 78
+  const width = 180
+  const height = 66
+  const color = rgb(0.08, 0.1, 0.16)
+  page.drawRectangle({ x, y, width, height, borderColor: color, borderWidth: 1.4 })
+  drawPdfCentered(page, registro.nome, x, y + 45, width, 12, font, rgb, color)
+  drawPdfCentered(page, registro.cargo || 'Optometrista', x, y + 25, width, 16, font, rgb, color)
+  if (registro.registro) drawPdfCentered(page, registro.registro, x, y + 8, width, 15, font, rgb, color)
+}
+
+async function gerarReceitaPdfBlob({ paciente, receita, usuario }) {
+  const response = await fetch('/receita-template.pdf?v=pdf-lib-preview-3')
+  if (!response.ok) throw new Error('Template da receita não encontrado.')
+
+  const pdf = await PDFDocument.load(await response.arrayBuffer())
+  const page = pdf.getPage(0)
+  const font = await pdf.embedFont(StandardFonts.Helvetica)
   const data = dataPartesBR(receita?.data)
   const diagnosticos = receita?.diagnosticos || []
   const lentes = receita?.lentes || []
 
-  return (
-    <section className="pdf-page">
-      <header className="pdf-header">
-        <img src="/logo-optica-plus.jpg" alt="Opto+ Clínica de Optometria" />
-        <h1>Prescrição de Óculos</h1>
-      </header>
+  drawPdfFit(page, paciente?.nome, 115, 674, 420, 11, font, rgb)
+  drawPdfTableValues(page, receita?.longe, 512, font, rgb)
+  drawPdfTableValues(page, receita?.perto, 388, font, rgb)
 
-      <section className="pdf-patient-line">
-        <span>Para Sr.(a)</span>
-        <strong>{paciente?.nome || ''}</strong>
-      </section>
+  drawPdfCheck(page, diagnosticos.includes('Miopia'), 55, 253, rgb)
+  drawPdfCheck(page, diagnosticos.includes('Hipermetropia'), 180, 253, rgb)
+  drawPdfCheck(page, diagnosticos.includes('Astigmatismo'), 335, 253, rgb)
+  drawPdfCheck(page, diagnosticos.includes('Presbiopia'), 485, 253, rgb)
 
-      <div className="pdf-curves">
-        <CurvaOptica label="O.D." />
-        <CurvaOptica label="O.E." />
-      </div>
+  drawPdfCheck(page, lentes.includes('Multifocal'), 125, 187, rgb)
+  drawPdfCheck(page, lentes.includes('Bifocal'), 300, 187, rgb)
+  drawPdfCheck(page, lentes.includes('VS'), 425, 187, rgb)
+  drawPdfCheck(page, lentes.includes('Fotossensível'), 125, 163, rgb)
+  drawPdfCheck(page, lentes.includes('A.R.'), 300, 163, rgb)
+  drawPdfCheck(page, lentes.includes('Incolor'), 425, 163, rgb)
 
-      <div className="pdf-tables">
-        <ReceitaPdfTabela titulo="Longe" dados={receita?.longe} />
-        <ReceitaPdfTabela titulo="Perto" dados={receita?.perto} />
-      </div>
+  drawPdfWrappedObs(page, receita?.obs, 74, 140, 250, font, rgb)
+  drawPdfCentered(page, data.dia, 75, 48, 30, 11, font, rgb)
+  drawPdfCentered(page, data.mes, 123, 48, 30, 11, font, rgb)
+  drawPdfCentered(page, String(data.ano || '').slice(-1), 187, 48, 22, 11, font, rgb)
+  drawCarimboPdf(page, getCarimboPdf(usuario, receita), font, rgb)
 
-      <section className="pdf-section">
-        <div className="pdf-diagnosticos">
-          <PdfCheckbox label="Miopia" checked={diagnosticos.includes('Miopia')} />
-          <PdfCheckbox label="Hipermetropia" checked={diagnosticos.includes('Hipermetropia')} />
-          <PdfCheckbox label="Astigmatismo" checked={diagnosticos.includes('Astigmatismo')} />
-          <PdfCheckbox label="Presbiopia" checked={diagnosticos.includes('Presbiopia')} />
-        </div>
-      </section>
-
-      <section className="pdf-instructions">
-        <p>1 - É normal nos primeiros dias sentir tontura, cefaléia, náuseas, ver desníveis no chão ou em escadas</p>
-        <p>2 - Para Multifocal ou Bifocal a adaptação poderá levar de 07 a 15 dias, podendo ter os mesmos sintomas acima</p>
-        <p>3 - Um exame de vista é sempre oportuno antes do seu filho começar a estudar</p>
-      </section>
-
-      <section className="pdf-lenses">
-        {lentesOptions.map((label) => (
-          <PdfCheckbox key={label} label={label} checked={lentes.includes(label)} />
-        ))}
-      </section>
-
-      <section className="pdf-obs">
-        <span>Obs.</span>
-        <p>{receita?.obs || ''}</p>
-      </section>
-
-      <div className="pdf-footer">
-        <div className="pdf-date">
-          <span className="pdf-date-label">Data</span>
-          <span className="pdf-date-field">{data.dia}</span>
-          <span className="pdf-date-separator">/</span>
-          <span className="pdf-date-field">{data.mes}</span>
-          <span className="pdf-date-separator">/202</span>
-          <span className="pdf-date-field pdf-date-year">{String(data.ano || '').slice(-1)}</span>
-        </div>
-        <div className="pdf-signature-line" />
-      </div>
-      <p className="pdf-credit">Coral Gráfica - whatsapp 98443-5667 - mar/2024</p>
-    </section>
-  )
+  return new Blob([await pdf.save()], { type: 'application/pdf' })
 }
 
 function Pdf({ paciente, usuario }) {
   const receita = paciente?.receitas?.[0]
-  const printRef = useRef(null)
   const [statusPdf, setStatusPdf] = useState('')
+  const [previewUrl, setPreviewUrl] = useState('')
+  const [gerandoPreview, setGerandoPreview] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    let objectUrl = ''
+
+    async function carregarPreview() {
+      if (!paciente || !receita) {
+        setPreviewUrl('')
+        return
+      }
+      setGerandoPreview(true)
+      setStatusPdf('')
+      try {
+        const blob = await gerarReceitaPdfBlob({ paciente, receita, usuario })
+        objectUrl = URL.createObjectURL(blob)
+        if (active) setPreviewUrl(objectUrl)
+      } catch (error) {
+        if (active) setStatusPdf(error.message || 'Não foi possível gerar a prévia do PDF.')
+      } finally {
+        if (active) setGerandoPreview(false)
+      }
+    }
+
+    carregarPreview()
+
+    return () => {
+      active = false
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [paciente?.id, receita?.id, receita?.data, usuario?.nome])
 
   async function gerarPdf() {
-    if (!paciente || !receita || !printRef.current) return
+    if (!paciente || !receita) return
+    if (previewUrl) {
+      window.location.href = previewUrl
+      return
+    }
+
     setStatusPdf('Gerando PDF...')
     try {
-      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-        import('html2canvas'),
-        import('jspdf'),
-      ])
-      let canvas
-      let renderHost
-      document.body.classList.add('pdf-export-mode')
-      try {
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
-        const pageElement = printRef.current.querySelector('.pdf-page')
-        const clonedPage = pageElement.cloneNode(true)
-        renderHost = document.createElement('div')
-        renderHost.className = 'pdf-capture-host'
-        renderHost.appendChild(clonedPage)
-        document.body.appendChild(renderHost)
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
-        canvas = await html2canvas(clonedPage, {
-          backgroundColor: '#ffffff',
-          scale: 2,
-          useCORS: true,
-          logging: false,
-          scrollX: 0,
-          scrollY: 0,
-          width: 794,
-          height: 1123,
-          windowWidth: 794,
-          windowHeight: 1123,
-        })
-      } finally {
-        renderHost?.remove()
-        document.body.classList.remove('pdf-export-mode')
-      }
-      const imgData = canvas.toDataURL('image/png')
-      const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4', compress: true })
-      const pageWidth = pdf.internal.pageSize.getWidth()
-      const pageHeight = pdf.internal.pageSize.getHeight()
-      const margin = 0
-      const imgWidth = pageWidth - margin * 2
-      const imgHeight = pageHeight - margin * 2
-      pdf.addImage(imgData, 'PNG', margin, margin, imgWidth, imgHeight, undefined, 'FAST')
-      const blob = pdf.output('blob')
-      if (blob.size > 25 * 1024 * 1024) {
-        throw new Error('O PDF ficou grande demais. Reduza as observações ou tente gerar novamente.')
-      }
-      const nomeArquivo = `receita-${slugArquivo(paciente.nome)}-${receita.data || hojeISO()}.pdf`
-      const storagePath = `${paciente.id}/${receita.id}-${Date.now()}.pdf`
-
-      const upload = await supabase.storage
-        .from('prescriptions')
-        .upload(storagePath, blob, { contentType: 'application/pdf', upsert: true })
-      if (upload.error) throw upload.error
-
-      const arquivo = await supabase.from('prescription_files').insert({
-        prescription_id: receita.id,
-        patient_id: paciente.id,
-        storage_path: storagePath,
-        file_name: nomeArquivo,
-        mime_type: 'application/pdf',
-        size_bytes: blob.size,
-        created_by: usuario.id,
-      })
-      if (arquivo.error) throw arquivo.error
-
-      await supabase.from('audit_logs').insert({
-        actor_user_id: usuario.id,
-        action: 'geracao_pdf',
-        entity_type: 'prescriptions',
-        entity_id: receita.id,
-        metadata: { storage_path: storagePath, file_name: nomeArquivo },
-      })
-
-      const signed = await supabase.storage.from('prescriptions').createSignedUrl(storagePath, 300)
-      if (signed.error) throw signed.error
-      window.open(signed.data.signedUrl, '_blank', 'noopener,noreferrer')
-      setStatusPdf('PDF salvo no Supabase.')
+      const blob = await gerarReceitaPdfBlob({ paciente, receita, usuario })
+      const url = URL.createObjectURL(blob)
+      setPreviewUrl(url)
+      window.location.href = url
     } catch (error) {
       setStatusPdf(error.message || 'Não foi possível gerar o PDF.')
     }
   }
 
+  const actionButton = previewUrl ? (
+    <a
+      href={previewUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+    >
+      <Printer size={17} />
+      Abrir / Imprimir PDF
+    </a>
+  ) : (
+    <Button variant="light" icon={Printer} onClick={gerarPdf}>{gerandoPreview ? 'Preparando...' : 'Abrir / Imprimir PDF'}</Button>
+  )
+
   return (
     <>
-      <div className="no-print">
-        <PageTitle title="PDF / Impressão" subtitle="Prévia no formato da ficha física." actions={<Button variant="light" icon={Printer} onClick={gerarPdf}>Exportar PDF</Button>} />
-        {statusPdf ? <p className="mb-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">{statusPdf}</p> : null}
-      </div>
+      <PageTitle title="PDF / Impressão" subtitle="Prévia real gerada a partir do template fixo." actions={receita ? actionButton : null} />
+      {statusPdf ? <p className="mb-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">{statusPdf}</p> : null}
       {receita ? (
-        <div ref={printRef} className="print-area">
-          <ReceitaPdfLayout paciente={paciente} receita={receita} />
+        <div className="space-y-4">
+          <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:block">
+            {previewUrl ? (
+              <iframe title="Prévia da receita em PDF" src={previewUrl} className="h-[78vh] w-full bg-white" />
+            ) : (
+              <div className="flex min-h-[420px] items-center justify-center p-6 text-sm text-slate-500">
+                {gerandoPreview ? 'Gerando prévia do PDF...' : 'A prévia do PDF aparecerá aqui.'}
+              </div>
+            )}
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-sm md:hidden">
+            <FileText className="mx-auto text-[#0F9AA8]" size={32} />
+            <h3 className="mt-3 font-semibold text-[#0D3B66]">Prévia do PDF</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-500">Alguns celulares não exibem PDF dentro da tela do sistema. Toque abaixo para abrir a receita no visualizador do navegador.</p>
+            {previewUrl ? (
+              <a
+                href={previewUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#0F9AA8] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#0b8995]"
+              >
+                <Printer size={17} />
+                Abrir / Imprimir PDF
+              </a>
+            ) : (
+              <Button full icon={Printer} onClick={gerarPdf}>{gerandoPreview ? 'Preparando...' : 'Abrir / Imprimir PDF'}</Button>
+            )}
+          </div>
         </div>
       ) : <Empty icon={FileText} title="Nenhuma receita" />}
     </>
@@ -2448,7 +2456,8 @@ export default function OticaGestaoProFinal() {
       email: form.email || null,
       estado: form.estado || 'SC',
       cidade: form.cidade || null,
-      unidade: form.unidade || form.cidade || null,
+      unidade: form.optica_externa ? form.unidade.trim() || null : form.cidade || null,
+      optica_externa: Boolean(form.optica_externa && form.unidade.trim()),
       observacoes: form.observacoes || null,
       usa_oculos: Boolean(form.usa_oculos),
       diabetes: Boolean(form.diabetes),
@@ -2474,7 +2483,8 @@ export default function OticaGestaoProFinal() {
       email: form.email || null,
       estado: form.estado || 'SC',
       cidade: form.cidade || null,
-      unidade: form.unidade || form.cidade || null,
+      unidade: form.optica_externa ? form.unidade.trim() || null : form.cidade || null,
+      optica_externa: Boolean(form.optica_externa && form.unidade.trim()),
       observacoes: form.observacoes || null,
       usa_oculos: Boolean(form.usa_oculos),
       diabetes: Boolean(form.diabetes),
@@ -2491,14 +2501,6 @@ export default function OticaGestaoProFinal() {
   }
 
   async function deletePaciente(patientId) {
-    const arquivos = await supabase.from('prescription_files').select('storage_path').eq('patient_id', patientId)
-    if (arquivos.error) throw arquivos.error
-    const paths = (arquivos.data || []).map((item) => item.storage_path).filter(Boolean)
-    if (paths.length) {
-      const storage = await supabase.storage.from('prescriptions').remove(paths)
-      if (storage.error) throw storage.error
-    }
-
     const deletes = await Promise.all([
       supabase.from('prescription_files').delete().eq('patient_id', patientId),
       supabase.from('prescriptions').delete().eq('patient_id', patientId),
@@ -2547,6 +2549,7 @@ export default function OticaGestaoProFinal() {
       estado: form.estado || 'SC',
       cidade: form.cidade || null,
       unidade: form.unidade || form.cidade || null,
+      optica_externa: Boolean(form.optica_externa && form.unidade.trim()),
       data: form.data,
       hora: form.hora,
       status: form.status,
